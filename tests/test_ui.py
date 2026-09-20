@@ -6,6 +6,13 @@ from governance.demo import demo_client
 APP = Path(__file__).resolve().parents[1] / 'streamlit' / 'governance_app.py'
 
 
+def view_radio(app):
+    # Modified 2026-09-21: the section selector (Metadata/Quyền trực tiếp/Quyền
+    # hiệu lực/Thay đổi quyền) is a st.radio keyed per target's full_name, so it
+    # cannot be selected by a fixed key like the "Loại đối tượng" radio (gov_kind).
+    return next(r for r in app.radio if r.key != 'gov_kind')
+
+
 def test_demo_navigation_and_inherited_permissions(monkeypatch):
     monkeypatch.setenv('GOVERNANCE_DEMO', 'true')
     app = AppTest.from_file(str(APP), default_timeout=15).run()
@@ -13,7 +20,10 @@ def test_demo_navigation_and_inherited_permissions(monkeypatch):
     app.radio(key='gov_kind').set_value('Table').run()
     assert not app.exception
     assert app.subheader[0].value == 'demo_governance.curated.customers'
+    view_radio(app).set_value('Quyền hiệu lực').run()
     assert any('Inherited from' in frame.value.columns for frame in app.dataframe)
+    # Demo is always read-only regardless of the (unset) write env vars.
+    view_radio(app).set_value('Thay đổi quyền').run()
     assert not any(b.label == 'Áp dụng thay đổi' for b in app.button)
     app.radio(key='gov_kind').set_value('Function').run()
     assert not app.exception
@@ -34,6 +44,7 @@ def test_review_then_apply_calls_sdk_once(monkeypatch):
     app = AppTest.from_file(str(APP), default_timeout=15).run()
     app.radio(key='gov_kind').set_value('Table').run()
     assert not app.exception
+    view_radio(app).set_value('Thay đổi quyền').run()
     next(x for x in app.text_input if x.label == 'Principal').set_value('analysts')
     app.multiselect[0].set_value(['MODIFY'])
     app.text_area[0].set_value('Approved ticket TEST-1')

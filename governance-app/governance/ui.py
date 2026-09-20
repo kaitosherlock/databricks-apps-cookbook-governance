@@ -138,8 +138,18 @@ def render():
         # configured separately, so a generic "read only" hides which one is unset.
         can_write, write_blocked_by = False, str(exc)
     cols[2].metric("Chế độ", "Đọc / Ghi" if can_write else "Chỉ đọc")
-    info, direct_tab, effective_tab, changes_tab = st.tabs(["Metadata", "Quyền trực tiếp", "Quyền hiệu lực", "Thay đổi quyền"])
-    with info:
+    # Modified 2026-09-21: st.tabs does not persist the active tab across reruns.
+    # Every button here (preview, apply, cancel) triggers a rerun, and Streamlit
+    # silently snapped back to the first tab even though the action succeeded —
+    # confusing after a grant/revoke that actually worked. A radio keyed per
+    # target keeps the current view across those reruns, the way a widget with a
+    # key does, and resets to Metadata when the operator switches object.
+    view = st.radio(
+        "Xem", ["Metadata", "Quyền trực tiếp", "Quyền hiệu lực", "Thay đổi quyền"],
+        horizontal=True, key=f"gov_view_{target.full_name}", label_visibility="collapsed",
+    )
+    st.divider()
+    if view == "Metadata":
         st.write(metadata.get("comment") or "Chưa có mô tả.")
         if columns := metadata.get("columns"):
             st.dataframe([{k: c.get(k) for k in ("name", "type_text", "nullable", "comment")} for c in columns], hide_index=True, width="stretch")
@@ -147,64 +157,67 @@ def render():
             st.json(metadata)
         st.download_button("Tải metadata JSON", json.dumps(metadata, ensure_ascii=False, indent=2),
                            f"{target.full_name}.json", "application/json")
+        return
     # Metadata remains useful even when the app is not allowed to inspect grants.
-    with direct_tab:
+    if view == "Quyền trực tiếp":
         try:
             table_export(grant_rows(service.grants(target)), "direct-grants")
         except Exception as exc:
             show_error(exc)
-    with effective_tab:
+        return
+    if view == "Quyền hiệu lực":
         st.caption("Gồm quyền trực tiếp và quyền kế thừa. API grants không thay thế việc kiểm tra quyền truy cập toàn diện (ownership, group membership, ABAC, row filters…).")
         try:
             table_export(grant_rows(service.grants(target, effective=True), True), "effective-grants")
         except Exception as exc:
             show_error(exc)
-    with changes_tab:
-        if not can_write:
-            st.info(f"Chỉ đọc — {write_blocked_by}")
-            st.caption(
-                f"Giá trị app đang thấy: GOVERNANCE_ENABLE_WRITES={'true' if settings.writes else 'false'} · "
-                f"GOVERNANCE_ADMIN_EMAILS có {len(settings.admins)} email · "
-                f"email của bạn ({actor or '—'}) {'có' if actor and actor in settings.admins else 'KHÔNG'} nằm trong danh sách · "
-                f"GOVERNANCE_CATALOGS={', '.join(sorted(settings.catalogs)) or '(trống — không giới hạn)'}"
-            )
-            st.caption("Env đổi trong app.yaml chỉ có hiệu lực sau khi Deploy lại. Local/demo luôn chỉ đọc.")
-            return
-        st.caption("Grant ở Catalog/Schema có thể ảnh hưởng cả đối tượng con hiện tại và tương lai. Grant/Revoke chỉ sửa quyền trực tiếp. Quyền kế thừa phải sửa ở cấp cha; người dùng vẫn có thể có quyền qua nhóm khác. USE_CATALOG và USE_SCHEMA được quản lý riêng.")
-        with st.form(f"gov_change_{target.kind}_{target.full_name}"):
-            principal = st.text_input("Principal", placeholder="Account group, user email hoặc service principal application ID")
-            action = st.selectbox("Thao tác", ["grant", "revoke"])
-            privileges = st.multiselect("Quyền", service.available_privileges(target))
-            reason = st.text_area("Lý do", max_chars=500)
-            prepare = st.form_submit_button("Xem trước thay đổi")
-        if prepare:
-            st.session_state.pop("gov_pending", None)
-            try:
-                st.session_state["gov_pending"] = service.prepare(target, principal, action, privileges, reason)
-            except Exception as exc:
-                show_error(exc)
-        pending = st.session_state.get("gov_pending")
-        review = st.empty()
-        if pending:
-            with review.container():
-                st.markdown("**Thay đổi đang chờ áp dụng**")
-                st.json(pending.preview())
-                with st.form("gov_confirm"):
-                    confirmation = st.text_input("Nhập lại tên đầy đủ của đối tượng", placeholder=target.full_name, key="gov_confirmation")
-                    apply = st.form_submit_button("Áp dụng thay đổi", type="primary")
-                if st.button("Huỷ bản xem trước", key="gov_cancel"):
-                    st.session_state.pop("gov_pending", None)
+        return
+    # view == "Thay đổi quyền"
+    if not can_write:
+        st.info(f"Chỉ đọc — {write_blocked_by}")
+        st.caption(
+            f"Giá trị app đang thấy: GOVERNANCE_ENABLE_WRITES={'true' if settings.writes else 'false'} · "
+            f"GOVERNANCE_ADMIN_EMAILS có {len(settings.admins)} email · "
+            f"email của bạn ({actor or '—'}) {'có' if actor and actor in settings.admins else 'KHÔNG'} nằm trong danh sách · "
+            f"GOVERNANCE_CATALOGS={', '.join(sorted(settings.catalogs)) or '(trống — không giới hạn)'}"
+        )
+        st.caption("Env đổi trong app.yaml chỉ có hiệu lực sau khi Deploy lại. Local/demo luôn chỉ đọc.")
+        return
+    st.caption("Grant ở Catalog/Schema có thể ảnh hưởng cả đối tượng con hiện tại và tương lai. Grant/Revoke chỉ sửa quyền trực tiếp. Quyền kế thừa phải sửa ở cấp cha; người dùng vẫn có thể có quyền qua nhóm khác. USE_CATALOG và USE_SCHEMA được quản lý riêng.")
+    with st.form(f"gov_change_{target.kind}_{target.full_name}"):
+        principal = st.text_input("Principal", placeholder="Account group, user email hoặc service principal application ID")
+        action = st.selectbox("Thao tác", ["grant", "revoke"])
+        privileges = st.multiselect("Quyền", service.available_privileges(target))
+        reason = st.text_area("Lý do", max_chars=500)
+        prepare = st.form_submit_button("Xem trước thay đổi")
+    if prepare:
+        st.session_state.pop("gov_pending", None)
+        try:
+            st.session_state["gov_pending"] = service.prepare(target, principal, action, privileges, reason)
+        except Exception as exc:
+            show_error(exc)
+    pending = st.session_state.get("gov_pending")
+    review = st.empty()
+    if pending:
+        with review.container():
+            st.markdown("**Thay đổi đang chờ áp dụng**")
+            st.json(pending.preview())
+            with st.form("gov_confirm"):
+                confirmation = st.text_input("Nhập lại tên đầy đủ của đối tượng", placeholder=target.full_name, key="gov_confirmation")
+                apply = st.form_submit_button("Áp dụng thay đổi", type="primary")
+            if st.button("Huỷ bản xem trước", key="gov_cancel"):
+                st.session_state.pop("gov_pending", None)
+                review.empty()
+                st.rerun()
+            if apply:
+                # Consume pending action before network call to prevent accidental re-submit.
+                st.session_state.pop("gov_pending", None)
+                try:
+                    event = service.apply(pending, confirmation)
+                    st.session_state["gov_notice"] = f"Databricks đã xác nhận thay đổi. Event ID: {event['event_id']}"
+                except Exception as exc:
+                    show_error(exc)
+                    st.info("Nếu có lỗi kết nối/timeout, làm mới quyền để kiểm tra kết quả trước khi thử lại.")
+                else:
                     review.empty()
                     st.rerun()
-                if apply:
-                    # Consume pending action before network call to prevent accidental re-submit.
-                    st.session_state.pop("gov_pending", None)
-                    try:
-                        event = service.apply(pending, confirmation)
-                        st.session_state["gov_notice"] = f"Databricks đã xác nhận thay đổi. Event ID: {event['event_id']}"
-                    except Exception as exc:
-                        show_error(exc)
-                        st.info("Nếu có lỗi kết nối/timeout, làm mới quyền để kiểm tra kết quả trước khi thử lại.")
-                    else:
-                        review.empty()
-                        st.rerun()
