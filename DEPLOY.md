@@ -66,18 +66,13 @@ Hoặc upload thư mục source qua UI Workspace rồi Deploy app từ chính th
 
 ## Cấu hình sau khi deploy
 
-`app.yaml` trong repo cố ý để **trống** các giá trị governance và tắt writes:
+App deploy từ Git, nên `app.yaml` đi kèm source và **ghi đè** mọi thứ set ở nơi khác. Vì vậy giá trị thật nằm luôn trong `streamlit/app.yaml` và `governance-app/app.yaml`, giữ đồng bộ giữa hai file.
 
-```yaml
-- name: GOVERNANCE_CATALOGS
-  value: ""
-- name: GOVERNANCE_ADMIN_EMAILS
-  value: ""
-- name: GOVERNANCE_ENABLE_WRITES
-  value: "false"
-```
+⚠️ **Repo này public** — mọi giá trị trong `app.yaml` đều đọc được công khai. Hiện tại nó chứa email admin. Tuyệt đối không đặt token, client secret hay hostname workspace vào đây. Nếu cần thêm cấu hình nhạy cảm, chuyển repo sang private trước.
 
-Đừng commit giá trị thật vào repo public. Điền chúng trong **App → Settings → Environment** trên Databricks Apps:
+Sửa giá trị thì commit + push + **Deploy** lại; env chỉ đổi sau khi deploy.
+
+Ý nghĩa từng biến:
 
 | Biến | Giá trị |
 |---|---|

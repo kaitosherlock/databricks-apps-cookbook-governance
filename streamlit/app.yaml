@@ -1,16 +1,23 @@
 command: ["streamlit", "run", "app.py"]
 env:
-  # Modified 2026-09-20: governance extension settings.
-  # Leave the values below empty in git and set the real ones in the
-  # Databricks Apps UI (App > Settings > Environment) so that catalog names and
-  # admin emails are never committed to a public repository.
+  # Modified 2026-09-21: real values live here because this app deploys from Git
+  # and app.yaml ships with the source, so it overrides anything set elsewhere.
+  # This repository is public: treat every value below as world-readable and keep
+  # credentials, tokens and hostnames out of it.
+  #
+  # Empty GOVERNANCE_CATALOGS means no catalog filter, for reads AND writes. With
+  # writes enabled below, Grant/Revoke reaches every catalog the app service
+  # principal can manage. Narrow it by listing catalogs, e.g. "catalog1".
   - name: GOVERNANCE_CATALOGS
-    value: "" # e.g. governance_sandbox; comma-separated exact catalog names
+    value: ""
+  # Only these emails see the write controls. Matched case-insensitively against
+  # the X-Forwarded-Email header from the Databricks Apps proxy.
   - name: GOVERNANCE_ADMIN_EMAILS
-    value: "" # e.g. admin@company.com; exact emails from Databricks Apps proxy
+    value: "minh18052003@gmail.com"
   - name: GOVERNANCE_ENABLE_WRITES
-    value: "false" # set to "true" only after the allowlist above is filled in
+    value: "true"
+  # Both must stay "false" on Databricks Apps.
   - name: GOVERNANCE_LOCAL
-    value: "false" # must stay "false" on Databricks Apps
+    value: "false"
   - name: GOVERNANCE_DEMO
-    value: "false" # must stay "false" on Databricks Apps
+    value: "false"

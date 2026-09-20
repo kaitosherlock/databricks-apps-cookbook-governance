@@ -1,11 +1,14 @@
 command: ["streamlit", "run", "app.py"]
 env:
+  # Modified 2026-09-21: kept in sync with streamlit/app.yaml so switching the
+  # app's source code path between the two roots does not silently change the
+  # governance configuration. See that file for the full notes.
   - name: GOVERNANCE_CATALOGS
-    value: "" # e.g. governance_sandbox; comma-separated exact catalog names
+    value: "" # empty = no catalog filter, for reads AND writes
   - name: GOVERNANCE_ADMIN_EMAILS
-    value: "" # e.g. admin@company.com; exact emails from Databricks Apps proxy
+    value: "minh18052003@gmail.com"
   - name: GOVERNANCE_ENABLE_WRITES
-    value: "false"
+    value: "true"
   - name: GOVERNANCE_LOCAL
     value: "false"
   - name: GOVERNANCE_DEMO
