@@ -124,20 +124,15 @@ class GovernanceService:
         self.actor = actor.strip().lower()
 
     def check_scope(self, catalog: str):
-        # Modified 2026-09-21: an empty GOVERNANCE_CATALOGS now means "every catalog
-        # the executing identity can see" for READS, instead of blocking the app.
-        # Writes stay gated on an explicit allowlist; see check_write.
+        # Modified 2026-09-21: GOVERNANCE_CATALOGS is now an optional scope filter.
+        # Empty means every catalog the executing identity can see, for reads AND
+        # writes. Requested explicitly by the operator. The remaining write gates
+        # are GOVERNANCE_ENABLE_WRITES and the GOVERNANCE_ADMIN_EMAILS allowlist
+        # in check_write, plus whatever Unity Catalog grants the app identity holds.
         if self.settings.catalogs and catalog not in self.settings.catalogs:
             raise GovernanceError("Catalog ngoài phạm vi GOVERNANCE_CATALOGS.")
 
     def check_write(self, target: Target):
-        # An unrestricted read scope must not become an unrestricted write scope:
-        # require the operator to name the catalogs they intend to modify.
-        if not self.settings.catalogs:
-            raise GovernanceError(
-                "Chức năng ghi yêu cầu khai báo GOVERNANCE_CATALOGS. "
-                "Để trống thì app chỉ đọc trên mọi catalog."
-            )
         self.check_scope(target.catalog)
         if self.settings.local or self.settings.demo or not self.settings.writes:
             raise GovernanceError("Chức năng ghi đang tắt.")

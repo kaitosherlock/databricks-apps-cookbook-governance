@@ -22,7 +22,12 @@ def service(settings=SETTINGS, actor="admin@example.com"):
     (replace(SETTINGS, local=True), "admin@example.com"),
     (replace(SETTINGS, demo=True), "admin@example.com"),
     (SETTINGS, ""), (SETTINGS, "reader@example.com"),
-    (replace(SETTINGS, catalogs=frozenset()), "admin@example.com"),
+    # Modified 2026-09-21: an empty GOVERNANCE_CATALOGS no longer fails closed on
+    # writes; it means "no catalog filter". Writes are gated on GOVERNANCE_ENABLE_WRITES
+    # and the admin allowlist only. Those two remain covered above and below.
+    (replace(SETTINGS, catalogs=frozenset(), writes=False), "admin@example.com"),
+    (replace(SETTINGS, catalogs=frozenset()), "reader@example.com"),
+    (replace(SETTINGS, catalogs=frozenset()), ""),
 ])
 def test_mutations_fail_closed(settings, actor):
     s = service(settings, actor)
@@ -124,9 +129,8 @@ def test_read_scope_enforced():
         s.metadata(Target("catalog", "production"))
 
 
-# Added 2026-09-21: an empty GOVERNANCE_CATALOGS opens the READ scope to every
-# catalog the executing identity can see. It must not open the write scope;
-# test_mutations_fail_closed already covers the frozenset() write case.
+# Added 2026-09-21: GOVERNANCE_CATALOGS is an optional scope filter. Empty means
+# no catalog restriction, for reads and writes alike.
 OPEN_SCOPE = replace(SETTINGS, catalogs=frozenset())
 
 
@@ -135,14 +139,19 @@ def test_empty_allowlist_lists_every_visible_catalog():
 
 
 def test_empty_allowlist_allows_reads_outside_any_named_catalog():
-    s = service(OPEN_SCOPE)
-    s.check_scope("production")  # must not raise
+    service(OPEN_SCOPE).check_scope("production")  # must not raise
 
 
-def test_empty_allowlist_still_blocks_writes():
+def test_empty_allowlist_allows_writes_when_enabled_and_actor_allowlisted():
     s = service(OPEN_SCOPE)
-    with pytest.raises(GovernanceError, match="GOVERNANCE_CATALOGS"):
-        s.check_write(TARGET)
+    s.check_write(TARGET)  # must not raise
+    change = s.prepare(TARGET, "analysts", "grant", ["MODIFY"], "Approved ticket")
+    assert s.apply(change, TARGET.full_name)["status"] == "succeeded"
+
+
+def test_empty_allowlist_writes_still_need_the_admin_allowlist():
+    with pytest.raises(GovernanceError, match="GOVERNANCE_ADMIN_EMAILS"):
+        service(OPEN_SCOPE, "reader@example.com").check_write(TARGET)
 
 
 def test_named_allowlist_still_filters_catalog_list():

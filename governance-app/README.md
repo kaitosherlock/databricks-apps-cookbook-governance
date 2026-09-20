@@ -88,8 +88,8 @@ env:
 ```
 
 - Danh sách catalog/email phân tách bằng dấu phẩy. Catalog khớp chính xác; email không phân biệt hoa/thường.
-- **`GOVERNANCE_CATALOGS` để trống = đọc mọi catalog** mà service principal của app nhìn thấy. Tiện để khảo sát, nhưng phạm vi đọc bằng đúng quyền UC đã cấp cho app — muốn giới hạn thì khai báo danh sách catalog.
-- **Ghi luôn yêu cầu `GOVERNANCE_CATALOGS` có giá trị.** Phạm vi đọc mở không kéo theo phạm vi ghi mở: app từ chối mọi Grant/Revoke khi allowlist trống, kể cả `writes=true` và email đúng allowlist.
+- **`GOVERNANCE_CATALOGS` là bộ lọc phạm vi tuỳ chọn.** Để trống nghĩa là **không giới hạn theo catalog**, áp dụng cho cả đọc lẫn ghi: app làm được mọi thứ mà quyền UC của service principal cho phép. Khai báo danh sách catalog nếu muốn thu hẹp phạm vi.
+- Khi để trống mà `writes=true`, sidebar hiện cảnh báo đỏ vì Grant/Revoke lúc đó áp dụng được cho mọi catalog app quản lý được.
 - Gói giao mặc định để catalog/email trống và writes=false, tức là chỉ đọc. Điền cấu hình thật trước khi cần quản trị.
 - Chỉ email trong allowlist mới ghi được. Thiếu email proxy, cấu hình ghi, hoặc catalog scope thì bị chặn.
 - Chỉ cấp `CAN USE` app cho nhóm quản trị/đọc governance thích hợp. Mọi viewer được phép vào app sẽ thấy metadata và grants bằng quyền **service principal**, không theo quyền UC cá nhân.

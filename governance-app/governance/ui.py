@@ -76,7 +76,14 @@ def render():
             st.write(", ".join(sorted(settings.catalogs)))
         else:
             st.write("Tất cả catalog nhìn thấy được")
-            st.caption("GOVERNANCE_CATALOGS trống → chỉ đọc. Khai báo catalog để bật Grant/Revoke.")
+            if settings.writes and not settings.local and not settings.demo:
+                st.error(
+                    "GOVERNANCE_CATALOGS trống và ghi đang bật: Grant/Revoke áp dụng được "
+                    "cho **mọi** catalog mà app service principal quản lý được.",
+                    icon="⚠️",
+                )
+            else:
+                st.caption("GOVERNANCE_CATALOGS trống → không giới hạn theo catalog.")
         st.caption("Chỉ hiển thị những đối tượng identity thực thi có thể truy cập.")
         if st.button("Làm mới", key="gov_refresh"):
             st.session_state.pop("gov_pending", None)
@@ -152,15 +159,7 @@ def render():
             show_error(exc)
     with changes_tab:
         if not can_write:
-            if not settings.catalogs:
-                st.info(
-                    "Chỉ đọc vì GOVERNANCE_CATALOGS đang trống. Phạm vi đọc mở cho mọi catalog, "
-                    "nhưng ghi thì phải khai báo rõ catalog được phép sửa. Khai báo GOVERNANCE_CATALOGS, "
-                    "bật GOVERNANCE_ENABLE_WRITES, cấu hình GOVERNANCE_ADMIN_EMAILS và cấp quyền UC "
-                    "tương ứng cho app service principal."
-                )
-            else:
-                st.info("Chỉ đọc. Để quản trị: bật GOVERNANCE_ENABLE_WRITES, cấu hình GOVERNANCE_ADMIN_EMAILS và cấp quyền UC tương ứng cho app service principal. Local/demo luôn chỉ đọc.")
+            st.info("Chỉ đọc. Để quản trị: bật GOVERNANCE_ENABLE_WRITES, cấu hình GOVERNANCE_ADMIN_EMAILS và cấp quyền UC tương ứng cho app service principal. Local/demo luôn chỉ đọc.")
             return
         st.caption("Grant ở Catalog/Schema có thể ảnh hưởng cả đối tượng con hiện tại và tương lai. Grant/Revoke chỉ sửa quyền trực tiếp. Quyền kế thừa phải sửa ở cấp cha; người dùng vẫn có thể có quyền qua nhóm khác. USE_CATALOG và USE_SCHEMA được quản lý riêng.")
         with st.form(f"gov_change_{target.kind}_{target.full_name}"):

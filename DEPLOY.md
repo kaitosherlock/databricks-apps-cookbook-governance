@@ -81,7 +81,7 @@ Hoặc upload thư mục source qua UI Workspace rồi Deploy app từ chính th
 
 | Biến | Giá trị |
 |---|---|
-| `GOVERNANCE_CATALOGS` | Danh sách catalog, phân tách dấu phẩy, khớp chính xác. VD `governance_sandbox`. **Để trống = đọc mọi catalog app nhìn thấy, và ghi bị chặn hoàn toàn** |
+| `GOVERNANCE_CATALOGS` | Bộ lọc phạm vi **tuỳ chọn**. Danh sách catalog phân tách dấu phẩy, khớp chính xác, VD `governance_sandbox`. **Để trống = không giới hạn theo catalog, cho cả đọc lẫn ghi** |
 | `GOVERNANCE_ADMIN_EMAILS` | Email được phép ghi, phân tách dấu phẩy, không phân biệt hoa/thường |
 | `GOVERNANCE_ENABLE_WRITES` | `true` chỉ sau khi allowlist ở trên đã điền |
 | `GOVERNANCE_LOCAL` | Phải là `false` trên Databricks Apps |
