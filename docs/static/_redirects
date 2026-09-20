@@ -1,0 +1,4 @@
+# SPA routing for dynamic gallery app pages
+# Serve gallery page which handles both list and detail views
+/gallery/:slug /gallery/ 200
+

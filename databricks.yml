@@ -1,0 +1,62 @@
+# Databricks Asset Bundle for the Apps Cookbook + Unity Catalog Governance extension.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+#
+# The workspace host is intentionally NOT hard-coded: this repository is public.
+# Supply it per machine with one of:
+#   databricks auth login --host https://<workspace>.cloud.databricks.com
+#   databricks bundle deploy -t dev --var="workspace_host=https://<workspace>.cloud.databricks.com"
+#   $env:DATABRICKS_HOST = "https://<workspace>.cloud.databricks.com"
+
+bundle:
+  name: databricks-apps-cookbook-governance
+
+variables:
+  workspace_host:
+    description: Workspace URL, e.g. https://my-workspace.cloud.databricks.com
+    default: ""
+  cookbook_app_name:
+    description: Databricks Apps name for the full Cookbook + Governance app.
+    default: cookbook-governance
+  governance_app_name:
+    description: Databricks Apps name for the standalone governance-only app.
+    default: uc-governance
+
+targets:
+  # Default: the full Cookbook app, which includes the Governance menu entry
+  # registered in streamlit/view_groups.py.
+  #
+  # `mode` is deliberately left unset so the app keeps the exact name above;
+  # `mode: development` would prefix resource names per user.
+  dev:
+    default: true
+    workspace:
+      host: ${var.workspace_host}
+    resources:
+      apps:
+        cookbook_governance:
+          name: ${var.cookbook_app_name}
+          description: Databricks Apps Cookbook with the Unity Catalog Governance extension.
+          source_code_path: ./streamlit
+
+  prod:
+    mode: production
+    workspace:
+      host: ${var.workspace_host}
+    resources:
+      apps:
+        cookbook_governance:
+          name: ${var.cookbook_app_name}
+          description: Databricks Apps Cookbook with the Unity Catalog Governance extension.
+          source_code_path: ./streamlit
+
+  # Deploy only the lean governance app (fewer dependencies, no Cookbook demos).
+  # Run with: databricks bundle deploy -t governance
+  governance:
+    workspace:
+      host: ${var.workspace_host}
+    resources:
+      apps:
+        uc_governance:
+          name: ${var.governance_app_name}
+          description: Unity Catalog metadata browser and grant manager.
+          source_code_path: ./governance-app

@@ -1,0 +1,3 @@
+# Versions validated locally; no Spark, SQL Warehouse, or extra database required.
+databricks-sdk==0.105.0
+streamlit==1.56.0

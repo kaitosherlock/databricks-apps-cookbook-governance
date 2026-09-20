@@ -1,0 +1,12 @@
+command: ["streamlit", "run", "app.py"]
+env:
+  - name: GOVERNANCE_CATALOGS
+    value: "" # e.g. governance_sandbox; comma-separated exact catalog names
+  - name: GOVERNANCE_ADMIN_EMAILS
+    value: "" # e.g. admin@company.com; exact emails from Databricks Apps proxy
+  - name: GOVERNANCE_ENABLE_WRITES
+    value: "false"
+  - name: GOVERNANCE_LOCAL
+    value: "false"
+  - name: GOVERNANCE_DEMO
+    value: "false"

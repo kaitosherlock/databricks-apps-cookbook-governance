@@ -1,0 +1,26 @@
+# This is a Databricks asset bundle definition for reflex_app.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+bundle:
+  name: reflex_app
+
+include:
+  - resources/*.yml
+  - resources/*/*.yml
+
+variables:
+  workspace_host:
+    description: Workspace URL, e.g. https://my-workspace.cloud.databricks.com
+    default: ""
+
+targets:
+  prod:
+    mode: production
+    workspace:
+      # Not hard-coded: this repository is public. Pass it at deploy time with
+      # --var="workspace_host=..." , DATABRICKS_HOST, or a CLI profile.
+      host: ${var.workspace_host}
+      # Deploy under the current user so there is only a single copy.
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: ${workspace.current_user.userName}
+        level: CAN_MANAGE
