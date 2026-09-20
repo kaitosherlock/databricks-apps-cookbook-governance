@@ -22,8 +22,8 @@ Cần [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html) v
 ```bash
 databricks auth login --host https://<workspace>.cloud.databricks.com
 
-git clone https://github.com/<user>/<repo>.git
-cd <repo>
+git clone https://github.com/kaitosherlock/databricks-apps-cookbook-governance.git
+cd databricks-apps-cookbook-governance
 
 databricks bundle validate -t dev
 databricks bundle deploy -t dev
