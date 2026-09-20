@@ -132,9 +132,11 @@ def render():
     cols[1].metric("Owner", metadata.get("owner") or "—")
     try:
         service.check_write(target)
-        can_write = True
-    except GovernanceError:
-        can_write = False
+        can_write, write_blocked_by = True, ""
+    except GovernanceError as exc:
+        # Modified 2026-09-21: keep the specific reason. The three write gates are
+        # configured separately, so a generic "read only" hides which one is unset.
+        can_write, write_blocked_by = False, str(exc)
     cols[2].metric("Chế độ", "Đọc / Ghi" if can_write else "Chỉ đọc")
     info, direct_tab, effective_tab, changes_tab = st.tabs(["Metadata", "Quyền trực tiếp", "Quyền hiệu lực", "Thay đổi quyền"])
     with info:
@@ -159,7 +161,14 @@ def render():
             show_error(exc)
     with changes_tab:
         if not can_write:
-            st.info("Chỉ đọc. Để quản trị: bật GOVERNANCE_ENABLE_WRITES, cấu hình GOVERNANCE_ADMIN_EMAILS và cấp quyền UC tương ứng cho app service principal. Local/demo luôn chỉ đọc.")
+            st.info(f"Chỉ đọc — {write_blocked_by}")
+            st.caption(
+                f"Giá trị app đang thấy: GOVERNANCE_ENABLE_WRITES={'true' if settings.writes else 'false'} · "
+                f"GOVERNANCE_ADMIN_EMAILS có {len(settings.admins)} email · "
+                f"email của bạn ({actor or '—'}) {'có' if actor and actor in settings.admins else 'KHÔNG'} nằm trong danh sách · "
+                f"GOVERNANCE_CATALOGS={', '.join(sorted(settings.catalogs)) or '(trống — không giới hạn)'}"
+            )
+            st.caption("Env đổi trong app.yaml chỉ có hiệu lực sau khi Deploy lại. Local/demo luôn chỉ đọc.")
             return
         st.caption("Grant ở Catalog/Schema có thể ảnh hưởng cả đối tượng con hiện tại và tương lai. Grant/Revoke chỉ sửa quyền trực tiếp. Quyền kế thừa phải sửa ở cấp cha; người dùng vẫn có thể có quyền qua nhóm khác. USE_CATALOG và USE_SCHEMA được quản lý riêng.")
         with st.form(f"gov_change_{target.kind}_{target.full_name}"):
