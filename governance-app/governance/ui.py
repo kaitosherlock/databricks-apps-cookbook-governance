@@ -60,9 +60,6 @@ def render():
         actor = "demo@example.com"
         st.warning("DEMO — dữ liệu minh hoạ, không kết nối Databricks và không thay đổi quyền.")
     else:
-        if not settings.catalogs:
-            st.info("Cấu hình GOVERNANCE_CATALOGS trong app.yaml để chọn catalog cần quản lý, rồi deploy lại.")
-            return
         if not settings.local and not actor:
             st.error("Không có identity từ Databricks Apps proxy. Mở ứng dụng bằng URL Databricks Apps; local chỉ hỗ trợ chế độ đọc.")
             return
@@ -74,7 +71,12 @@ def render():
     st.caption(f"Người dùng: {actor or 'local profile'} · API chạy bằng: {'demo' if settings.demo else 'local profile' if settings.local else 'app service principal'}")
     with st.sidebar:
         st.markdown("**Governance scope**")
-        st.write(", ".join(sorted(settings.catalogs)))
+        # Modified 2026-09-21: empty allowlist = read every visible catalog.
+        if settings.catalogs:
+            st.write(", ".join(sorted(settings.catalogs)))
+        else:
+            st.write("Tất cả catalog nhìn thấy được")
+            st.caption("GOVERNANCE_CATALOGS trống → chỉ đọc. Khai báo catalog để bật Grant/Revoke.")
         st.caption("Chỉ hiển thị những đối tượng identity thực thi có thể truy cập.")
         if st.button("Làm mới", key="gov_refresh"):
             st.session_state.pop("gov_pending", None)
@@ -82,7 +84,13 @@ def render():
     try:
         catalogs = service.catalogs()
         if not catalogs:
-            st.info("Không tìm thấy catalog trong phạm vi cấu hình. Kiểm tra tên và quyền của identity thực thi.")
+            if settings.catalogs:
+                st.info("Không tìm thấy catalog trong phạm vi cấu hình. Kiểm tra tên và quyền của identity thực thi.")
+            else:
+                st.info(
+                    "Service principal của app chưa nhìn thấy catalog nào. "
+                    "Cấp USE CATALOG và BROWSE cho application ID của app (tab Authorization) trong Catalog Explorer."
+                )
             return
         catalog = st.selectbox("Catalog", [c["name"] for c in catalogs], key="gov_catalog")
         kind_label = st.radio("Loại đối tượng", ["Catalog", "Schema", "Table", "Function"], horizontal=True, key="gov_kind")
@@ -144,7 +152,15 @@ def render():
             show_error(exc)
     with changes_tab:
         if not can_write:
-            st.info("Chỉ đọc. Để quản trị: bật GOVERNANCE_ENABLE_WRITES, cấu hình GOVERNANCE_ADMIN_EMAILS và cấp quyền UC tương ứng cho app service principal. Local/demo luôn chỉ đọc.")
+            if not settings.catalogs:
+                st.info(
+                    "Chỉ đọc vì GOVERNANCE_CATALOGS đang trống. Phạm vi đọc mở cho mọi catalog, "
+                    "nhưng ghi thì phải khai báo rõ catalog được phép sửa. Khai báo GOVERNANCE_CATALOGS, "
+                    "bật GOVERNANCE_ENABLE_WRITES, cấu hình GOVERNANCE_ADMIN_EMAILS và cấp quyền UC "
+                    "tương ứng cho app service principal."
+                )
+            else:
+                st.info("Chỉ đọc. Để quản trị: bật GOVERNANCE_ENABLE_WRITES, cấu hình GOVERNANCE_ADMIN_EMAILS và cấp quyền UC tương ứng cho app service principal. Local/demo luôn chỉ đọc.")
             return
         st.caption("Grant ở Catalog/Schema có thể ảnh hưởng cả đối tượng con hiện tại và tương lai. Grant/Revoke chỉ sửa quyền trực tiếp. Quyền kế thừa phải sửa ở cấp cha; người dùng vẫn có thể có quyền qua nhóm khác. USE_CATALOG và USE_SCHEMA được quản lý riêng.")
         with st.form(f"gov_change_{target.kind}_{target.full_name}"):

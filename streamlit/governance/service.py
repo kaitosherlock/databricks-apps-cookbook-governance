@@ -124,10 +124,20 @@ class GovernanceService:
         self.actor = actor.strip().lower()
 
     def check_scope(self, catalog: str):
-        if catalog not in self.settings.catalogs:
+        # Modified 2026-09-21: an empty GOVERNANCE_CATALOGS now means "every catalog
+        # the executing identity can see" for READS, instead of blocking the app.
+        # Writes stay gated on an explicit allowlist; see check_write.
+        if self.settings.catalogs and catalog not in self.settings.catalogs:
             raise GovernanceError("Catalog ngoài phạm vi GOVERNANCE_CATALOGS.")
 
     def check_write(self, target: Target):
+        # An unrestricted read scope must not become an unrestricted write scope:
+        # require the operator to name the catalogs they intend to modify.
+        if not self.settings.catalogs:
+            raise GovernanceError(
+                "Chức năng ghi yêu cầu khai báo GOVERNANCE_CATALOGS. "
+                "Để trống thì app chỉ đọc trên mọi catalog."
+            )
         self.check_scope(target.catalog)
         if self.settings.local or self.settings.demo or not self.settings.writes:
             raise GovernanceError("Chức năng ghi đang tắt.")
@@ -136,7 +146,8 @@ class GovernanceService:
 
     def catalogs(self):
         return sorted(
-            (as_dict(c) for c in self.w.catalogs.list(include_browse=True, max_results=0) if c.name in self.settings.catalogs),
+            (as_dict(c) for c in self.w.catalogs.list(include_browse=True, max_results=0)
+             if not self.settings.catalogs or c.name in self.settings.catalogs),
             key=lambda x: x["name"],
         )
 

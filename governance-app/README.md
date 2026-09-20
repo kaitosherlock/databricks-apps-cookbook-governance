@@ -88,7 +88,9 @@ env:
 ```
 
 - Danh sách catalog/email phân tách bằng dấu phẩy. Catalog khớp chính xác; email không phân biệt hoa/thường.
-- Gói giao mặc định để catalog/email trống và writes=false. Điền cấu hình thật trước khi deploy.
+- **`GOVERNANCE_CATALOGS` để trống = đọc mọi catalog** mà service principal của app nhìn thấy. Tiện để khảo sát, nhưng phạm vi đọc bằng đúng quyền UC đã cấp cho app — muốn giới hạn thì khai báo danh sách catalog.
+- **Ghi luôn yêu cầu `GOVERNANCE_CATALOGS` có giá trị.** Phạm vi đọc mở không kéo theo phạm vi ghi mở: app từ chối mọi Grant/Revoke khi allowlist trống, kể cả `writes=true` và email đúng allowlist.
+- Gói giao mặc định để catalog/email trống và writes=false, tức là chỉ đọc. Điền cấu hình thật trước khi cần quản trị.
 - Chỉ email trong allowlist mới ghi được. Thiếu email proxy, cấu hình ghi, hoặc catalog scope thì bị chặn.
 - Chỉ cấp `CAN USE` app cho nhóm quản trị/đọc governance thích hợp. Mọi viewer được phép vào app sẽ thấy metadata và grants bằng quyền **service principal**, không theo quyền UC cá nhân.
 - Email người thao tác lấy từ `X-Forwarded-Email` của Databricks Apps proxy. Chỉ dùng mô hình này sau proxy Databricks Apps; không host công khai app này trên server khác rồi tin header do client gửi.

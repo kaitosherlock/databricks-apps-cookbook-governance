@@ -122,3 +122,28 @@ def test_read_scope_enforced():
     s = service()
     with pytest.raises(GovernanceError):
         s.metadata(Target("catalog", "production"))
+
+
+# Added 2026-09-21: an empty GOVERNANCE_CATALOGS opens the READ scope to every
+# catalog the executing identity can see. It must not open the write scope;
+# test_mutations_fail_closed already covers the frozenset() write case.
+OPEN_SCOPE = replace(SETTINGS, catalogs=frozenset())
+
+
+def test_empty_allowlist_lists_every_visible_catalog():
+    assert [c["name"] for c in service(OPEN_SCOPE).catalogs()] == ["demo_governance"]
+
+
+def test_empty_allowlist_allows_reads_outside_any_named_catalog():
+    s = service(OPEN_SCOPE)
+    s.check_scope("production")  # must not raise
+
+
+def test_empty_allowlist_still_blocks_writes():
+    s = service(OPEN_SCOPE)
+    with pytest.raises(GovernanceError, match="GOVERNANCE_CATALOGS"):
+        s.check_write(TARGET)
+
+
+def test_named_allowlist_still_filters_catalog_list():
+    assert [c["name"] for c in service(replace(SETTINGS, catalogs=frozenset({"other"}))).catalogs()] == []
