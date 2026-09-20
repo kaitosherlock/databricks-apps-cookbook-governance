@@ -1,10 +1,25 @@
 import os
 import streamlit as st
 import pandas as pd
-from databricks.connect import DatabricksSession
+
+# Modified 2026-09-21: databricks-connect only installs on Python 3.12, so it is
+# absent on runtimes such as the current Databricks Apps image. Degrade to a
+# message on this page instead of crashing it with an ImportError traceback.
+try:
+    from databricks.connect import DatabricksSession
+except ImportError:
+    DatabricksSession = None
 
 st.header("Compute", divider=True)
 st.subheader("Connect to serverless cluster")
+
+if DatabricksSession is None:
+    st.warning(
+        "`databricks-connect` is not installed in this environment, so this recipe "
+        "is unavailable. Its wheels require Python 3.12 and this runtime uses a "
+        "different version. The code snippet and requirements tabs below still apply.",
+        icon="⚠️",
+    )
 st.write(
     """
     This recipe uses [Databricks Connect](https://docs.databricks.com/en/dev-tools/databricks-connect/python/index.html) to execute pre-defined Python or SQL code on a **serverless** cluster with UI inputs. 
@@ -19,7 +34,7 @@ def connect_to_serverless_cluster():
 
 
 with tab_a:
-    spark = connect_to_serverless_cluster()
+    spark = connect_to_serverless_cluster() if DatabricksSession is not None else None
 
     sub_tab_1, sub_tab_2 = st.tabs(["**Python**", "**SQL**"])
     with sub_tab_1:
@@ -29,7 +44,7 @@ with tab_a:
             value=10,
             step=1,
         )
-        if st.button("Generate"):
+        if st.button("Generate") and spark is not None:
             df = spark.range(input_val).toPandas()
             st.write("Data:")
             st.dataframe(df)
@@ -56,7 +71,7 @@ with tab_a:
             ("INNER JOIN", "LEFT JOIN", "FULL OUTER JOIN", "UNION", "EXCEPT"),
         )
 
-        if st.button("Perform"):
+        if st.button("Perform") and spark is not None:
             if operation in ("INNER JOIN", "LEFT JOIN", "FULL OUTER JOIN"):
                 query = f"SELECT a.id, a.value AS value_a, b.value AS value_b FROM {a} {operation} {b} ON a.id = b.id"
             else:

@@ -117,6 +117,30 @@ python scripts/export_governance.py
 python -m pytest tests -q
 ```
 
+## Lỗi thường gặp
+
+### `No command to run and no Python file found`
+
+Source code path đang trỏ vào gốc repo. Gốc repo không có `app.yaml` — đây là repo nhiều app. Điền `streamlit` hoặc `governance-app` vào ô **Source code path**.
+
+### `No matching distribution found for databricks-connect~=18.1`
+
+Wheel của `databricks-connect` từ bản 16.2 trở đi đánh dấu `Requires-Python ==3.12.*`. Build image của Databricks Apps không phải 3.12, nên pip không tìm được bản nào hợp lệ và fail toàn bộ bước cài package.
+
+Đã xử lý trong `streamlit/requirements.txt` bằng environment marker:
+
+```
+databricks-connect~=18.1; python_version == "3.12"
+```
+
+Hệ quả: trên runtime không phải 3.12, hai trang `Connect to shared cluster` và `Connect to serverless cluster` hiển thị cảnh báo thay vì chạy được. Mọi trang khác, gồm Governance, không bị ảnh hưởng — `st.navigation` chỉ import module của một trang khi bạn bấm vào nó.
+
+Muốn dùng hai trang đó thì cần runtime Python 3.12, hoặc hạ pin xuống bản chạy được với Python của image (`databricks-connect~=16.1`) — lưu ý bản 16.x có thể xung đột pin `pandas~=3.0`.
+
+### Build fail ở package khác
+
+`streamlit/requirements.txt` còn `databricks-sql-connector`, `psycopg[binary]`, `pandas~=3.0`, `streamlit-folium`. Nếu bản nào không resolve được trên image, deploy `governance-app` để xác nhận pipeline chạy thông trước — bản đó chỉ cần `databricks-sdk` + `streamlit` và có đủ 100% tính năng governance.
+
 ## Ghi chú về repo
 
 - Workflow `.github/workflows/deploy.yml` của upstream (deploy Docusaurus lên Cloudflare Workers) đã được gỡ bỏ — nó cần secret `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` không có trong repo này và sẽ fail mỗi lần push.

@@ -1,10 +1,25 @@
 import os
 import streamlit as st
 import pandas as pd
-from databricks.connect import DatabricksSession
+
+# Modified 2026-09-21: databricks-connect only installs on Python 3.12, so it is
+# absent on runtimes such as the current Databricks Apps image. Degrade to a
+# message on this page instead of crashing it with an ImportError traceback.
+try:
+    from databricks.connect import DatabricksSession
+except ImportError:
+    DatabricksSession = None
 
 st.header("Compute", divider=True)
 st.subheader("Connect to shared cluster")
+
+if DatabricksSession is None:
+    st.warning(
+        "`databricks-connect` is not installed in this environment, so this recipe "
+        "is unavailable. Its wheels require Python 3.12 and this runtime uses a "
+        "different version. The code snippet and requirements tabs below still apply.",
+        icon="⚠️",
+    )
 st.write(
     """
     This recipe uses [Databricks Connect](https://docs.databricks.com/en/dev-tools/databricks-connect/python/index.html) to execute pre-defined Python or SQL code on a **shared** cluster with UI inputs. 
@@ -30,7 +45,7 @@ with tab_a:
         help="Copy a shared Compute [cluster ID](https://docs.databricks.com/en/workspace/workspace-details.html#cluster-url-and-id) to connect to.",
     )
 
-    if cluster_id:
+    if cluster_id and DatabricksSession is not None:
         spark = connect_to_cluster(cluster_id)
         st.success("Successfully connected to Spark:", icon="✅")
         session_info = {
