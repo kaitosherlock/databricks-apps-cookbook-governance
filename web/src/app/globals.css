@@ -1,0 +1,164 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Design tokens.
+ *
+ * The palette continues the teal the Streamlit build used (#146B60), because it
+ * reads as institutional rather than consumer and it already passed contrast.
+ * What is new is that every colour is a token with a dark-mode value: the old
+ * theme pinned itself to light, which is a poor fit for a tool people keep open
+ * all day beside a terminal.
+ *
+ * Contrast against the surface it is used on (WCAG 2.1):
+ *   light  ink #123029 on #FFFFFF        15.0:1
+ *   light  ink-muted #46605A on #FFFFFF   6.8:1
+ *   light  primary #146B60 on #FFFFFF     6.4:1
+ *   light  danger #9F2A1F on #FFFFFF      7.4:1
+ *   dark   primary #4FB3A3 on #0D1614     7.3:1
+ *   dark   ink-muted #A3B8B3 on #0D1614   8.8:1
+ * All comfortably clear AA for body text, and AA for non-text UI.
+ */
+:root {
+  --bg: #ffffff;
+  --surface: #f4f8f7;
+  --raised: #ffffff;
+  --border: #dce6e3;
+  --border-strong: #bcccc8;
+
+  --ink: #123029;
+  --ink-muted: #46605a;
+  --ink-faint: #6b827d;
+
+  --primary: #146b60;
+  --primary-hover: #0e5148;
+  --primary-ink: #ffffff;
+  --primary-soft: #e6f2f0;
+
+  --danger: #9f2a1f;
+  --danger-ink: #7c1f16;
+  --danger-soft: #fceeec;
+  --danger-border: #e8bfb9;
+
+  --caution: #8a5a00;
+  --caution-ink: #6b4600;
+  --caution-soft: #fdf4e3;
+  --caution-border: #ebd7a8;
+
+  --info: #1b5e8a;
+  --info-ink: #14496b;
+  --info-soft: #eaf2f8;
+  --info-border: #bcd5e6;
+
+  --good: #1e6b45;
+  --good-ink: #175335;
+  --good-soft: #e8f4ed;
+  --good-border: #b8dcc6;
+
+  --radius-sm: 4px;
+  --radius: 7px;
+  --radius-lg: 11px;
+
+  --shadow-card: 0 1px 2px rgb(18 48 41 / 0.05);
+  --shadow-pop: 0 8px 24px -6px rgb(18 48 41 / 0.18);
+}
+
+.dark {
+  --bg: #0d1614;
+  --surface: #131f1d;
+  --raised: #172522;
+  --border: #263733;
+  --border-strong: #375049;
+
+  --ink: #e4efec;
+  --ink-muted: #a3b8b3;
+  --ink-faint: #7c918c;
+
+  --primary: #4fb3a3;
+  --primary-hover: #66c4b5;
+  --primary-ink: #06221e;
+  --primary-soft: #143630;
+
+  --danger: #f08a7d;
+  --danger-ink: #ffc4bb;
+  --danger-soft: #351714;
+  --danger-border: #5c2a23;
+
+  --caution: #e0ac4e;
+  --caution-ink: #f5d394;
+  --caution-soft: #302512;
+  --caution-border: #54401d;
+
+  --info: #6fb4de;
+  --info-ink: #a9d5ef;
+  --info-soft: #12242f;
+  --info-border: #234356;
+
+  --good: #5cc08a;
+  --good-ink: #9fdcba;
+  --good-soft: #102a1d;
+  --good-border: #1f4a33;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 8px 24px -6px rgb(0 0 0 / 0.6);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--ink);
+    font-feature-settings: "cv02", "cv03";
+    /* Vietnamese sets stacked diacritics; a little extra leading keeps them
+       from touching the line above in dense tables. */
+    line-height: 1.55;
+  }
+
+  /* A visible focus ring is not decoration. Operators here grant permissions,
+     and keyboard users must always be able to see what is about to receive a
+     keystroke. */
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::selection {
+    background-color: var(--primary-soft);
+    color: var(--ink);
+  }
+
+  /* Identifiers are read character by character and compared against Catalog
+     Explorer, so they never wrap mid-token and never use a proportional face. */
+  code,
+  kbd,
+  samp {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.9em;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

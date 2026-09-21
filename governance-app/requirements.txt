@@ -3,4 +3,19 @@
 # governance APIs this app depends on (policies, governed tags, entity tag
 # assignments, data quality, RFA) do not exist at runtime.
 databricks-sdk==0.105.0
+
+# HTTP front end. Serves both the JSON API and the compiled single-page UI, so
+# the deployment stays a single Python process - Databricks Apps runs exactly
+# one command and provides no Node runtime.
+#
+# These pins are the versions the test suite actually runs against. They were
+# chosen to have wheels for both the Apps runtime (3.11) and Python 3.14, so a
+# developer machine does not need to compile pydantic-core from source.
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic==2.13.5
+
+# Retained so the previous Streamlit UI can still be booted by switching the
+# command in app.yaml. Remove this pin once the new front end has been signed
+# off and ui/ is deleted.
 streamlit==1.56.0

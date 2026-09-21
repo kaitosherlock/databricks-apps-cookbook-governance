@@ -3,7 +3,22 @@
 # Databricks UI/API, not app.yaml keys.
 #
 # Changing any value below only takes effect after the app is DEPLOYED again.
-command: ["streamlit", "run", "app.py"]
+#
+# ---------------------------------------------------------------------------
+# Front end. Exactly one of these two lines is active.
+#
+#   server.py  - FastAPI + the compiled React/TypeScript UI in static/.
+#                Requires that `cd web && npm run build` has been run and its
+#                output committed, because Databricks Apps installs Python
+#                packages only and cannot run npm at deploy time.
+#
+#   app.py     - the previous Streamlit UI. Kept as a working fallback: if the
+#                new front end misbehaves in the Apps runtime, comment the
+#                uvicorn line, uncomment this one, and Deploy. That is the whole
+#                rollback procedure.
+# ---------------------------------------------------------------------------
+command: ["python", "server.py"]
+# command: ["streamlit", "run", "app.py"]
 env:
   # Optional catalog allowlist, comma separated. Empty = every catalog the app
   # service principal can see, for reads AND writes.

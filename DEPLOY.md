@@ -25,11 +25,45 @@ Tài liệu thao tác cho người deploy và trực vận hành ứng dụng
 
 Vì app lấy nguồn từ Git, **code phải lên `main` trước khi deploy**.
 
+### 2.1. Build giao diện trước (bắt buộc nếu có sửa `web/`)
+
+Databricks Apps chỉ cài gói Python và **không chạy được `npm` lúc deploy**, nên
+giao diện phải được build sẵn và commit.
+
+```bash
+cd web
+npm install
+npm run typecheck
+npm run build
+cd ..
+```
+
+`npm run build` ghi kết quả vào `governance-app/static/`. Nếu bỏ bước này sau khi
+sửa `web/`, app sẽ deploy thành công nhưng vẫn chạy giao diện của lần build trước.
+
+> Chạy `python governance-app/server.py` mà chưa build thì trang chủ trả về mã
+> 503 kèm hướng dẫn, không phải lỗi 500 khó hiểu.
+
+### 2.2. Đẩy lên Git
+
 ```bash
 git add -A
 git commit -m "<mô tả thay đổi>"
 git push origin main
 ```
+
+### 2.3. Chọn giao diện chạy
+
+`governance-app/app.yaml` có đúng một dòng `command` đang hoạt động:
+
+```yaml
+command: ["python", "server.py"]          # giao diện React (mặc định)
+# command: ["streamlit", "run", "app.py"] # giao diện Streamlit cũ
+```
+
+**Quy trình quay lui:** đổi chỗ hai dòng comment, commit, push, bấm Deploy. Giao
+diện Streamlit cũ vẫn dùng chung backend `ucg/`, nên không mất chức năng nào ở
+các màn hình nó có.
 
 Sau đó trong Databricks:
 

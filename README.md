@@ -4,10 +4,14 @@
 tìm tài sản dữ liệu, xem ai có quyền gì và quyền đến từ đâu, rồi thay đổi quyền
 một cách có kiểm soát.
 
-- **Một source tree duy nhất**: `governance-app/`
-- **Một entry point duy nhất**: `governance-app/app.py`
-- **Python + `databricks-sdk` + Streamlit**. Không có Spark, không cần database riêng.
+- **Một tiến trình duy nhất khi chạy**: `governance-app/server.py`
+- **Backend Python + `databricks-sdk`**; **giao diện React / TypeScript / Next.js**
+- Không có Spark, không cần database riêng.
 - Không còn chế độ demo, không còn dữ liệu giả trong luồng người dùng.
+
+> **Giao diện Streamlit cũ vẫn còn trong cây mã** (`governance-app/app.py` và
+> `governance-app/ui/`) như một đường lui. Đổi `command` trong `app.yaml` rồi
+> deploy lại là quay về được. Xem [`DEPLOY.md`](DEPLOY.md) mục 2.
 
 > Bản này bắt nguồn từ [databricks-apps-cookbook](https://github.com/databricks-solutions/databricks-apps-cookbook)
 > (upstream commit `88a0387`). Toàn bộ trang demo, menu demo, ví dụ và tài liệu của
@@ -20,9 +24,16 @@ một cách có kiểm soát.
 
 ```
 governance-app/
-├── app.py                  entry point Streamlit, đăng ký điều hướng
+├── server.py               entry point: FastAPI phục vụ /api và giao diện tĩnh
 ├── app.yaml                cấu hình Databricks Apps (chỉ có command + env)
-├── requirements.txt        databricks-sdk==0.105.0, streamlit==1.56.0
+├── requirements.txt        databricks-sdk==0.105.0, fastapi, uvicorn
+├── static/                 GIAO DIỆN ĐÃ BUILD — commit vào git, xem mục 1.1
+├── api/                    TẦNG HTTP — chỉ chuyển vận, không có logic quản trị
+│   ├── context.py          dựng Context từ header proxy, mỗi request một lần
+│   ├── runtime.py          kho tiến trình: client, capability, log, plan
+│   ├── http.py             ánh xạ mã lỗi sang HTTP
+│   └── routers/            mỗi nhóm màn hình một module
+├── app.py                  entry point Streamlit cũ (đường lui)
 ├── ucg/                    BACKEND — không import Streamlit
 │   ├── config.py           cấu hình và ánh xạ vai trò (phía máy chủ)
 │   ├── errors.py           mã lỗi ổn định + thông báo tiếng Việt
@@ -36,13 +47,36 @@ governance-app/
 │   ├── plans.py            vòng đời Plan → Preview → Outcome
 │   ├── audit.py            nhật ký thao tác của ứng dụng
 │   └── services/           mỗi nhóm chức năng một module
-└── ui/                     FRONTEND — Streamlit
+└── ui/                     giao diện Streamlit cũ (đường lui)
     ├── session.py  chrome.py  widgets.py  state.py  picker.py  nav.py
     └── pages/              mỗi màn hình một module
+
+web/                        MÃ NGUỒN GIAO DIỆN — không được deploy
+├── src/app/                một thư mục một route
+├── src/components/         ui/ · shell/ · governance/
+└── src/lib/                hợp đồng API, React Query, trạng thái chọn đối tượng
 ```
 
 Backend hoàn toàn tách khỏi giao diện: `ucg/` không import Streamlit ở bất kỳ đâu
-(có test kiểm tra điều này), nên có thể kiểm thử và tái sử dụng độc lập.
+(có test kiểm tra điều này), nên có thể kiểm thử và tái sử dụng độc lập. Tầng
+`api/` cũng không thêm logic quản trị nào: mọi quyết định phân quyền, mọi kiểm
+tra đầu vào và toàn bộ vòng đời thay đổi vẫn nằm trong `ucg/`.
+
+### 1.1. Vì sao `static/` được commit
+
+Databricks Apps chạy **đúng một lệnh** và chỉ cài gói Python — không có Node lúc
+deploy. Giao diện vì thế được build sẵn (`cd web && npm run build`) và kết quả
+commit vào `governance-app/static/`, để `server.py` phục vụ. Chi tiết trong
+[`web/README.md`](web/README.md).
+
+### 1.2. Bản xem trước nằm ở máy chủ
+
+Khi chuyển sang mô hình trình duyệt + API, điều dễ mất nhất là tính an toàn của
+bước xem trước. Ở đây `Plan` **không bao giờ đi qua dây**: nó nằm trong kho phía
+máy chủ, trình duyệt chỉ giữ một `plan_id` mờ, và `/api/grants/apply` chỉ nhận
+`plan_id` cùng chuỗi xác nhận người dùng gõ. Nội dung thay đổi được đọc lại từ
+bản lưu của máy chủ, nên một client bị sửa đổi không thể áp dụng thứ khác với
+thứ đã được xem trước.
 
 ### Quy trình thay đổi quyền
 

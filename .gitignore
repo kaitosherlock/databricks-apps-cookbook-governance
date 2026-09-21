@@ -8,18 +8,18 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
+/build/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
@@ -71,7 +71,7 @@ instance/
 .scrapy
 
 # PyBuilder
-target/
+/target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -149,3 +149,16 @@ ml-models.ipr
 # Streamlit local secrets — never commit
 .streamlit/secrets.toml
 **/.streamlit/secrets.toml
+
+# ---------------------------------------------------------------------------
+# Front end (web/)
+# ---------------------------------------------------------------------------
+# Source and build inputs are tracked; only machine-generated trees are not.
+web/node_modules/
+web/.next/
+web/out/
+*.tsbuildinfo
+
+# NOTE: governance-app/static/ is the COMPILED front end and *is* committed on
+# purpose. Databricks Apps deploys this repository from git and cannot run npm
+# at deploy time, so the built bundle has to be in the tree. Do not add it here.
