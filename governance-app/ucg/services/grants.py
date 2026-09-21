@@ -36,6 +36,27 @@ SOURCE_LABELS = {
 }
 
 
+def classify_principal(identifier: str) -> str:
+    """How Unity Catalog will read a principal string.
+
+    UC does not return a principal *type*, it returns a string and interprets
+    it by shape: an address is a user, a UUID is a service principal's
+    applicationId, anything else is an account group. Showing that reading is
+    more useful than a column of "unknown", and it is the same rule the grant
+    will actually be evaluated by.
+    """
+    value = (identifier or "").strip()
+    if not value:
+        return "Chưa xác định"
+    if "@" in value:
+        return "Người dùng"
+    parts = value.split("-")
+    if (len(parts) == 5 and [len(p) for p in parts] == [8, 4, 4, 4, 12]
+            and all(c in "0123456789abcdefABCDEF" for p in parts for c in p)):
+        return "Service principal"
+    return "Nhóm"
+
+
 @dataclass
 class GrantRow:
     principal: str
@@ -55,16 +76,31 @@ class GrantRow:
 
     @property
     def revocable_here(self) -> bool:
-        """Only a direct grant can be revoked on this object."""
-        return self.source == DIRECT
+        """Only a direct grant can be revoked on this object, and only if we
+        could read which privilege it is."""
+        return self.source == DIRECT and not self.unreadable
+
+    @property
+    def unreadable(self) -> bool:
+        """Databricks named a privilege the pinned SDK enum does not contain.
+
+        The SDK parses `privilege` into an enum and yields None for anything it
+        has not shipped - READ METADATA, for instance, is documented but absent
+        from 0.105.0. The grant is real and it does widen access, so the row is
+        kept and labelled rather than dropped, which would under-report access.
+        """
+        return not self.privilege and self.source != OWNERSHIP
 
     def row(self) -> dict:
-        info = priv.info(self.privilege)
+        if self.unreadable:
+            label, code = "Không đọc được mã quyền", "—"
+        else:
+            label, code = priv.info(self.privilege).label, self.privilege
         return {
             "Principal": self.principal,
-            "Loại principal": self.principal_type or "Chưa xác định",
-            "Quyền": info.label,
-            "Mã Databricks": self.privilege,
+            "Loại principal": self.principal_type or classify_principal(self.principal),
+            "Quyền": label,
+            "Mã Databricks": code,
             "Nguồn quyền": self.source_label,
             "Cấp tại": self.inherited_from or (
                 "Chính đối tượng này" if self.source == DIRECT else "—"
@@ -95,11 +131,25 @@ class GrantView:
         return [r for r in self.rows if r.principal == principal]
 
     def direct_privileges(self, principal: str) -> list[str]:
+        """Direct privileges we can name. Unreadable ones are excluded so they
+        never end up in a revoke payload or a state fingerprint."""
         return sorted({r.privilege for r in self.rows
-                       if r.principal == principal and r.source == DIRECT})
+                       if r.principal == principal and r.source == DIRECT and r.privilege})
+
+    @property
+    def has_unreadable(self) -> bool:
+        return any(r.unreadable for r in self.rows)
 
     def table(self) -> list[dict]:
         return [r.row() for r in self.rows]
+
+    #: Shown only when at least one row could not be named.
+    UNREADABLE_NOTE = (
+        "Một số dòng hiển thị “Không đọc được mã quyền”: Databricks trả về một quyền mà "
+        "phiên bản SDK đang ghim chưa biết tên (ví dụ READ METADATA). Quyền đó **có thật** "
+        "và vẫn có hiệu lực — ứng dụng giữ lại dòng thay vì bỏ đi để không báo thiếu quyền. "
+        "Đối chiếu trong Catalog Explorer để biết chính xác."
+    )
 
     #: Shown under every grant table. The grant list is not the whole story.
     CAVEAT = (

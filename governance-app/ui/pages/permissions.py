@@ -21,6 +21,21 @@ from .. import nav, picker, state, widgets
 _SOURCE_FILTERS = ["Tất cả", "Cấp trực tiếp", "Kế thừa"]
 
 
+class _OwnerOnly:
+    """The few fields picker.header reads, filled from the owner lookup.
+
+    The permissions screen already resolves the owner to add the ownership row;
+    reusing it here keeps the header honest without a second metadata call.
+    """
+
+    def __init__(self, owner: str, target: Target):
+        self.owner = owner
+        self.comment = ""
+        self.type_label = target.label
+        self.is_pipeline_managed = False
+        self.managed_by = ""
+
+
 def render(ctx: Context):
     assets = AssetService(ctx)
     grants = GrantService(ctx)
@@ -41,9 +56,7 @@ def render(ctx: Context):
     st.divider()
 
     owner = _owner_of(assets, target)
-    picker.header(ctx, target, None)
-    if owner:
-        st.caption(f"Chủ sở hữu hiện tại: **{owner}**")
+    picker.header(ctx, target, _OwnerOnly(owner, target))
 
     tab_effective, tab_direct = st.tabs(
         ["Quyền hiệu lực (gồm kế thừa)", "Chỉ quyền cấp trực tiếp"]
@@ -113,6 +126,8 @@ def _grant_table(ctx: Context, grants: GrantService, target: Target, owner: str,
         download_name=f"{target.full_name}-{'quyen-hieu-luc' if effective else 'quyen-truc-tiep'}",
     )
     st.caption(view.CAVEAT)
+    if view.has_unreadable:
+        st.warning(view.UNREADABLE_NOTE, icon=":material/help:")
 
     if effective:
         _inheritance_help(ctx, target, filtered)

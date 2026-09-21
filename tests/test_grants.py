@@ -298,3 +298,58 @@ def test_operation_is_logged_with_both_identities(settings, table_client):
     assert event.reason == "vì dự án X"
     assert event.status == Status.VERIFIED
     assert event.principal == "newcomer"
+
+
+# -- privileges the pinned SDK cannot name --------------------------------
+def test_a_privilege_the_sdk_cannot_name_is_kept_and_labelled(settings, table_client):
+    """Databricks names privileges the pinned enum lacks (e.g. READ METADATA).
+
+    The SDK parses those to None. Dropping the row would under-report access,
+    so it is kept, labelled, and excluded from anything that writes.
+    """
+    from conftest import Box, Page
+
+    def effective_with_a_blank(securable_type, full_name, **kwargs):
+        if kwargs.get("page_token") is not None:
+            return Page([], None)
+        return Page([Box(principal="account users", privileges=[
+            Box(privilege="MANAGE", inherited_from_name="catalog1",
+                inherited_from_type="CATALOG"),
+            Box(privilege=None, inherited_from_name="catalog1",
+                inherited_from_type="CATALOG"),
+        ])], None)
+
+    table_client.grants.get_effective = effective_with_a_blank
+    view = service(settings, table_client).effective(TABLE)
+
+    assert view.ok
+    assert view.has_unreadable
+    blank = [r for r in view.rows if r.unreadable]
+    assert len(blank) == 1
+    rendered = blank[0].row()
+    assert rendered["Quyền"] == "Không đọc được mã quyền"
+    assert rendered["Nguồn quyền"] == "Kế thừa từ catalog"
+    # It must never be offered as something to revoke.
+    assert blank[0].revocable_here is False
+
+
+def test_an_unreadable_privilege_never_reaches_a_revoke_payload(settings, table_client):
+    from conftest import Box, Page
+
+    def direct_with_a_blank(securable_type, full_name, **kwargs):
+        if kwargs.get("page_token") is not None:
+            return Page([], None)
+        return Page([Box(principal="analysts", privileges=["SELECT", None])], None)
+
+    table_client.grants.get = direct_with_a_blank
+    view = service(settings, table_client).direct(TABLE)
+    assert view.direct_privileges("analysts") == ["SELECT"]
+
+
+def test_principal_type_is_derived_the_way_unity_catalog_reads_it(settings, table_client):
+    from ucg.services.grants import classify_principal
+
+    assert classify_principal("edison696996@gmail.com") == "Người dùng"
+    assert classify_principal("bb651242-8fd8-4274-a914-ea3d020c5373") == "Service principal"
+    assert classify_principal("account users") == "Nhóm"
+    assert classify_principal("") == "Chưa xác định"
