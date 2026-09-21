@@ -222,3 +222,71 @@ def test_activity_flags_an_unknown_outcome(settings, table_client):
     text = all_text(app)
     assert "chưa xác định" in text.lower()
     assert "trước khi thử lại" in text.lower() or "đối chiếu" in text.lower()
+
+
+# -- every page renders --------------------------------------------------
+ALL_PAGES = [
+    "home", "asset", "permissions", "change_access", "tags", "policies",
+    "sharing", "storage", "federation", "lineage", "audit", "quality",
+    "requests", "activity", "diagnostics",
+]
+
+
+@pytest.mark.parametrize("page_name", ALL_PAGES)
+def test_every_page_renders_with_an_object_selected(page_name, settings, table_client):
+    """A page must survive a workspace that answers, whatever it answers."""
+    import importlib
+
+    module = importlib.import_module(f"ui.pages.{page_name}")
+    app = run_page(module.render, make_context(settings, table_client),
+                   selection=SELECTED_TABLE)
+    assert not app.exception, f"{page_name} raised: {app.exception}"
+
+
+@pytest.mark.parametrize("page_name", ALL_PAGES)
+def test_every_page_renders_when_databricks_refuses(page_name, settings):
+    """A page must explain a refusal rather than crash or blank out."""
+    import importlib
+
+    class Denier:
+        def __getattr__(self, _name):
+            def call(*a, **k):
+                raise FakeDatabricksError("PERMISSION_DENIED", "sensitive upstream body")
+            return call
+
+    class Client:
+        def __getattr__(self, _name):
+            return Denier()
+
+    module = importlib.import_module(f"ui.pages.{page_name}")
+    app = run_page(module.render, make_context(settings, Client()),
+                   selection=SELECTED_TABLE)
+    assert not app.exception, f"{page_name} raised: {app.exception}"
+    assert "sensitive upstream body" not in all_text(app)
+
+
+@pytest.mark.parametrize("page_name", ALL_PAGES)
+def test_no_page_offers_a_write_control_to_a_viewer(page_name, settings, table_client):
+    """Buttons are UX, but a viewer should not even be shown the apply step."""
+    import importlib
+
+    module = importlib.import_module(f"ui.pages.{page_name}")
+    ctx = make_context(settings, table_client, "viewer@x.com")
+    app = run_page(module.render, ctx, selection=SELECTED_TABLE)
+    assert not app.exception
+    labels = [str(b.label) for b in app.button]
+    forbidden = ("Áp dụng thay đổi", "Thu hồi SELECT", "Xoá monitor")
+    for label in labels:
+        assert label not in forbidden, f"{page_name} offered '{label}' to a viewer"
+
+
+def test_requests_page_never_shows_an_approval_control(settings, table_client):
+    from ui.pages import requests
+
+    ctx = make_context(settings, table_client, "platform@x.com")
+    app = run_page(requests.render, ctx, selection=SELECTED_TABLE)
+    assert not app.exception
+    labels = " ".join(str(b.label) for b in app.button).lower()
+    for word in ("phê duyệt", "duyệt yêu cầu", "từ chối yêu cầu"):
+        assert word not in labels, f"an approval control appeared: {word}"
+    assert "không" in all_text(app).lower()
