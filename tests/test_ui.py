@@ -290,3 +290,28 @@ def test_requests_page_never_shows_an_approval_control(settings, table_client):
     for word in ("phê duyệt", "duyệt yêu cầu", "từ chối yêu cầu"):
         assert word not in labels, f"an approval control appeared: {word}"
     assert "không" in all_text(app).lower()
+
+
+def test_principal_lookup_distinguishes_refusal_from_no_match(settings, table_client):
+    """A directory the app may not read must not read as "nobody matched"."""
+    from ui.pages import change_access
+
+    class RefusingDirectory:
+        def list(self, *a, **k):
+            raise FakeDatabricksError("PERMISSION_DENIED")
+
+    table_client.users = RefusingDirectory()
+    table_client.groups = RefusingDirectory()
+    table_client.service_principals = RefusingDirectory()
+
+    def type_a_search_term(page_state, st):
+        st.session_state["ca_pmode_table:catalog1.schema1.routes"] = "Tìm trong workspace"
+        st.session_state["ca_psearch_table:catalog1.schema1.routes"] = "edison"
+
+    ctx = make_context(settings, table_client, "admin@x.com")
+    app = run_page(change_access.render, ctx, selection=SELECTED_TABLE,
+                   before=type_a_search_term)
+    assert not app.exception
+    text = all_text(app)
+    assert "Không đọc được danh bạ" in text
+    assert "Không có principal nào khớp" not in text

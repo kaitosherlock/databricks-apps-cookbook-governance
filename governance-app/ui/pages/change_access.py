@@ -48,13 +48,15 @@ def render(ctx: Context):
         _read_only(ctx, target, decision)
         return
 
-    picker.header(ctx, target, None)
-    st.divider()
-
+    detail = None
     try:
-        table_type = assets.detail(target).sub_type if target.kind == "table" else ""
+        detail = assets.detail(target)
     except Exception:
-        table_type = ""
+        detail = None
+    table_type = (detail.sub_type if detail is not None and target.kind == "table" else "")
+
+    picker.header(ctx, target, detail)
+    st.divider()
 
     try:
         available = grants.available_privileges(target, table_type=table_type)
@@ -167,10 +169,28 @@ def _principal_field(ctx: Context, target: Target, default: str) -> str:
         widgets.show_error(found.error, context="Không tra cứu được principal.")
         st.caption("Chuyển sang “Nhập trực tiếp” để nhập định danh thủ công.")
         return default
+
     usable = [p for p in found.items if p.valid_for_uc]
     if not usable:
-        st.info("Không tìm thấy principal phù hợp.", icon=":material/person_search:")
-        st.caption(PrincipalService.SCOPE_NOTE)
+        # "Nothing matched" and "we were not allowed to look" must not render
+        # the same way: only one of them means the principal does not exist.
+        if found.completeness == "partial_permission":
+            st.warning(
+                "Không đọc được danh bạ người dùng/nhóm của workspace, nên chưa thể "
+                "khẳng định có hay không principal khớp.",
+                icon=":material/lock:",
+            )
+            st.caption(
+                "Tài khoản dịch vụ của ứng dụng thường chỉ nhìn thấy chính nó trong SCIM "
+                "cấp workspace, và SCIM cấp workspace vốn không thấy account group. "
+                "Hãy dùng “Nhập trực tiếp” — Unity Catalog vẫn nhận đúng định danh bạn nhập."
+            )
+        else:
+            st.info(
+                f"Không có principal nào khớp “{term.strip()}” trong danh bạ đọc được.",
+                icon=":material/person_search:",
+            )
+            st.caption(PrincipalService.SCOPE_NOTE)
         return default
 
     options = [p.identifier for p in usable]
