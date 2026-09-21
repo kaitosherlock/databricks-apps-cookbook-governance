@@ -41,6 +41,7 @@ def render(ctx: Context):
 
 def _capabilities(ctx: Context):
     report = ctx.capabilities
+    _probe_controls(ctx, report)
     counts = report.summary()
 
     cols = st.columns(4)
@@ -76,6 +77,42 @@ def _capabilities(ctx: Context):
 Thiếu quyền **không** đồng nghĩa với tính năng không tồn tại, và tính năng không
 tồn tại **không** được báo là lỗi quyền.
             """
+        )
+
+
+def _probe_controls(ctx: Context, report):
+    """Run the read-only checks that turn "Chưa kiểm tra" into a real answer.
+
+    The cheap probes run automatically the first time this screen is opened.
+    The SQL-backed ones never do: they would start a warehouse, and nobody
+    should be billed for opening a diagnostics page.
+    """
+    from ucg import probes
+
+    if not st.session_state.get("ucg_probed_cheap"):
+        with st.spinner("Đang kiểm tra khả năng trên workspace…"):
+            probes.run(report, probes.cheap_probes(ctx))
+        st.session_state["ucg_probed_cheap"] = True
+
+    cols = st.columns([2, 2, 4])
+    with cols[0]:
+        if st.button("Kiểm tra lại", icon=":material/refresh:", width="stretch",
+                     key="cap_recheck"):
+            probes.run(report, probes.cheap_probes(ctx))
+            st.rerun()
+    with cols[1]:
+        sql_done = st.session_state.get("ucg_probed_sql")
+        if st.button("Kiểm tra chức năng cần SQL", icon=":material/database:",
+                     width="stretch", key="cap_sql", disabled=bool(sql_done)):
+            with st.spinner("Đang chạy truy vấn kiểm tra…"):
+                probes.run(report, probes.sql_probes(ctx))
+            st.session_state["ucg_probed_sql"] = True
+            st.rerun()
+    with cols[2]:
+        st.caption(
+            "Kiểm tra chức năng cần SQL sẽ **khởi động SQL Warehouse** và phát sinh chi phí, "
+            "nên ứng dụng không tự chạy."
+            if not sql_done else "Đã kiểm tra các chức năng cần SQL trong phiên này."
         )
 
 
