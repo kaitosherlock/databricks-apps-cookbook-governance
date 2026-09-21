@@ -1,3 +1,6 @@
-# Versions validated locally; no Spark, SQL Warehouse, or extra database required.
+# The Databricks Apps runtime pre-installs databricks-sdk 0.33.0. Pinning here
+# is not optional: without it the app silently runs a two-year-old SDK and the
+# governance APIs this app depends on (policies, governed tags, entity tag
+# assignments, data quality, RFA) do not exist at runtime.
 databricks-sdk==0.105.0
 streamlit==1.56.0

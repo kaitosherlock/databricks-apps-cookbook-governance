@@ -1,60 +1,224 @@
-from pathlib import Path
-from unittest.mock import Mock
-from streamlit.testing.v1 import AppTest
-from governance.demo import demo_client
+"""Render the real Streamlit pages against a fake workspace.
 
-APP = Path(__file__).resolve().parents[1] / 'streamlit' / 'governance_app.py'
+These are the checks that a unit test of the service layer cannot make: that a
+page renders at all, that a viewer is shown an explanation instead of a write
+control, and that a refused read does not blank the screen.
+"""
+from __future__ import annotations
 
+import pytest
 
-def view_radio(app):
-    # Modified 2026-09-21: the section selector (Metadata/Quyền trực tiếp/Quyền
-    # hiệu lực/Thay đổi quyền) is a st.radio keyed per target's full_name, so it
-    # cannot be selected by a fixed key like the "Loại đối tượng" radio (gov_kind).
-    return next(r for r in app.radio if r.key != 'gov_kind')
+from conftest import FakeDatabricksError, FakeWorkspaceClient, make_context
 
+st_testing = pytest.importorskip("streamlit.testing.v1")
+AppTest = st_testing.AppTest
 
-def test_demo_navigation_and_inherited_permissions(monkeypatch):
-    monkeypatch.setenv('GOVERNANCE_DEMO', 'true')
-    app = AppTest.from_file(str(APP), default_timeout=15).run()
-    assert not app.exception
-    app.radio(key='gov_kind').set_value('Table').run()
-    assert not app.exception
-    assert app.subheader[0].value == 'demo_governance.curated.customers'
-    view_radio(app).set_value('Quyền hiệu lực').run()
-    assert any('Inherited from' in frame.value.columns for frame in app.dataframe)
-    # Demo is always read-only regardless of the (unset) write env vars.
-    view_radio(app).set_value('Thay đổi quyền').run()
-    assert not any(b.label == 'Áp dụng thay đổi' for b in app.button)
-    app.radio(key='gov_kind').set_value('Function').run()
-    assert not app.exception
-    assert 'normalize_email' in app.subheader[0].value
+from ucg.naming import Target  # noqa: E402
+from ui import state  # noqa: E402
+
+TABLE = Target("table", "catalog1", "schema1", "routes")
 
 
-def test_review_then_apply_calls_sdk_once(monkeypatch):
-    monkeypatch.setenv('GOVERNANCE_DEMO', 'false')
-    monkeypatch.setenv('GOVERNANCE_LOCAL', 'false')
-    monkeypatch.setenv('GOVERNANCE_CATALOGS', 'demo_governance')
-    monkeypatch.setenv('GOVERNANCE_ENABLE_WRITES', 'true')
-    monkeypatch.setenv('GOVERNANCE_ADMIN_EMAILS', 'admin@example.com')
-    import governance.ui as ui
-    client = demo_client()
-    client.grants.update = Mock()
-    monkeypatch.setattr(ui, 'make_client', lambda settings: client)
-    monkeypatch.setattr(ui, 'actor_from_headers', lambda headers: 'admin@example.com')
-    app = AppTest.from_file(str(APP), default_timeout=15).run()
-    app.radio(key='gov_kind').set_value('Table').run()
-    assert not app.exception
-    view_radio(app).set_value('Thay đổi quyền').run()
-    next(x for x in app.text_input if x.label == 'Principal').set_value('analysts')
-    app.multiselect[0].set_value(['MODIFY'])
-    app.text_area[0].set_value('Approved ticket TEST-1')
-    next(b for b in app.button if b.label == 'Xem trước thay đổi').click().run()
-    assert not app.exception
-    client.grants.update.assert_not_called()
-    next(x for x in app.text_input if x.label == 'Nhập lại tên đầy đủ của đối tượng').set_value('demo_governance.curated.customers')
-    next(b for b in app.button if b.label == 'Áp dụng thay đổi').click().run()
-    assert not app.exception
-    client.grants.update.assert_called_once()
-    assert any('Databricks đã xác nhận' in message.value for message in app.success)
+def _script(render=None, ctx=None, selection=None, before=None):
+    """Body executed inside the Streamlit test runtime.
+
+    AppTest re-executes this function's source in a fresh module namespace, so
+    it must close over nothing: every dependency arrives as a keyword argument
+    and every import happens inside.
+    """
+    import streamlit as st
+
+    from ui import state as page_state
+
+    if selection:
+        st.session_state[page_state.SELECTION] = dict(selection)
+    if before is not None:
+        before(page_state, st)
+    render(ctx)
+
+
+def run_page(render, ctx, *, selection=None, before=None):
+    app = AppTest.from_function(
+        _script,
+        kwargs={"render": render, "ctx": ctx, "selection": selection, "before": before},
+        default_timeout=30,
+    )
     app.run()
-    client.grants.update.assert_called_once()
+    return app
+
+
+def all_text(app) -> str:
+    chunks = []
+    for collection in (app.markdown, app.caption, app.info, app.warning,
+                       app.error, app.success, app.subheader, app.title):
+        for element in collection:
+            chunks.append(str(getattr(element, "value", "")))
+    return "\n".join(chunks)
+
+
+SELECTED_TABLE = {"catalog": "catalog1", "schema": "schema1",
+                  "kind": "table", "name": "routes"}
+
+
+# -- home ----------------------------------------------------------------
+def test_home_renders_and_lists_assets(settings, table_client):
+    from ui.pages import home
+
+    app = run_page(home.render, make_context(settings, table_client))
+    assert not app.exception
+    text = all_text(app)
+    assert "Tìm tài sản dữ liệu" in text
+
+
+def test_home_explains_an_empty_workspace(settings):
+    from ui.pages import home
+
+    app = run_page(home.render, make_context(settings, FakeWorkspaceClient()))
+    assert not app.exception
+    text = all_text(app)
+    # An empty catalog list must come with instructions, not a blank screen.
+    assert "catalog" in text.lower()
+
+
+# -- asset ---------------------------------------------------------------
+def test_asset_page_shows_identity_and_owner(settings, table_client):
+    from ui.pages import asset
+
+    app = run_page(asset.render, make_context(settings, table_client),
+                   selection=SELECTED_TABLE)
+    assert not app.exception
+    text = all_text(app)
+    assert "routes" in text
+    assert "Chủ sở hữu" in text
+
+
+# -- permissions ---------------------------------------------------------
+def test_permissions_distinguishes_direct_from_inherited(settings, table_client):
+    from ui.pages import permissions
+
+    app = run_page(permissions.render, make_context(settings, table_client),
+                   selection=SELECTED_TABLE)
+    assert not app.exception
+    frames = [df.value for df in app.dataframe]
+    assert frames, "the grant table should render"
+    rendered = str(frames)
+    assert "Cấp trực tiếp" in rendered
+    assert "Kế thừa" in rendered
+
+
+def test_permissions_explains_a_refused_read(settings, table_client):
+    from ui.pages import permissions
+
+    table_client.grants.fail_with = FakeDatabricksError("PERMISSION_DENIED")
+    app = run_page(permissions.render, make_context(settings, table_client),
+                   selection=SELECTED_TABLE)
+    assert not app.exception
+    text = all_text(app)
+    assert "quyền" in text.lower()
+    # A refusal must never be phrased as "nobody has access".
+    assert "Không ai có quyền" not in text
+
+
+# -- change access -------------------------------------------------------
+def test_viewer_sees_read_only_with_a_reason(settings, table_client):
+    from ui.pages import change_access
+
+    ctx = make_context(settings, table_client, "viewer@x.com")
+    app = run_page(change_access.render, ctx, selection=SELECTED_TABLE)
+    assert not app.exception
+    text = all_text(app)
+    assert "Chỉ đọc" in text
+    assert "Người xem" in text or "vai trò" in text.lower()
+    # No apply control may be offered at all.
+    labels = [b.label for b in app.button]
+    assert not any("Áp dụng" in label for label in labels)
+
+
+def test_writes_disabled_explains_the_deploy_requirement(read_only_settings, table_client):
+    from ui.pages import change_access
+
+    ctx = make_context(read_only_settings, table_client, "admin@x.com")
+    app = run_page(change_access.render, ctx, selection=SELECTED_TABLE)
+    assert not app.exception
+    text = all_text(app)
+    assert "GOVERNANCE_ENABLE_WRITES" in text
+    assert "deploy" in text.lower()
+
+
+def test_admin_sees_the_preview_step(settings, table_client):
+    from ui.pages import change_access
+
+    ctx = make_context(settings, table_client, "admin@x.com")
+    app = run_page(change_access.render, ctx, selection=SELECTED_TABLE)
+    assert not app.exception
+    labels = [b.label for b in app.button]
+    assert any("xem trước" in label.lower() for label in labels)
+
+
+def test_a_stale_preview_is_discarded_when_an_input_changes(settings, table_client):
+    """The rule that stops a Streamlit rerun applying an outdated plan."""
+    from ucg.services.grants import GrantService
+
+    from ui.pages import change_access
+
+    ctx = make_context(settings, table_client, "admin@x.com")
+    plan = GrantService(ctx).plan_change(TABLE, "newcomer", "grant", ["SELECT"], "lý do")
+
+    def stage_a_stale_plan(page_state, st):
+        page_state.set_plan(plan, "signature-built-from-the-old-inputs")
+        # A different signature stands for "the operator edited a field".
+        page_state.invalidate_plan_if_changed("signature-after-the-edit")
+        st.session_state["_plan_survived"] = page_state.get_plan() is not None
+
+    app = run_page(change_access.render, ctx, selection=SELECTED_TABLE,
+                   before=stage_a_stale_plan)
+    assert not app.exception
+    assert app.session_state["_plan_survived"] is False
+
+
+# -- diagnostics ---------------------------------------------------------
+def test_diagnostics_lists_capabilities_and_role(settings, table_client):
+    from ui.pages import diagnostics
+
+    app = run_page(diagnostics.render, make_context(settings, table_client))
+    assert not app.exception
+    text = all_text(app)
+    assert "Khả năng" in text
+
+
+def test_diagnostics_never_prints_a_secret(settings, table_client, monkeypatch):
+    from ui.pages import diagnostics
+
+    monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "super-secret-value")
+    app = run_page(diagnostics.render, make_context(settings, table_client))
+    assert not app.exception
+    rendered = all_text(app) + str([d.value for d in app.dataframe])
+    assert "super-secret-value" not in rendered
+
+
+# -- activity ------------------------------------------------------------
+def test_activity_labels_itself_as_session_only(settings, table_client):
+    from ui.pages import activity
+
+    app = run_page(activity.render, make_context(settings, table_client))
+    assert not app.exception
+    text = all_text(app)
+    assert "phiên" in text.lower()
+    assert "system.access.audit" in text
+
+
+def test_activity_flags_an_unknown_outcome(settings, table_client):
+    from ucg.audit import Event, Status
+    from ui.pages import activity
+
+    ctx = make_context(settings, table_client, "admin@x.com")
+    ctx.log.record(Event(
+        action="grant", target="catalog1.schema1.routes", target_type="Bảng",
+        actor="admin@x.com", execution_identity="app_service_principal",
+        status=Status.UNKNOWN, summary="Cấp quyền SELECT",
+    ))
+    app = run_page(activity.render, ctx)
+    assert not app.exception
+    text = all_text(app)
+    assert "chưa xác định" in text.lower()
+    assert "trước khi thử lại" in text.lower() or "đối chiếu" in text.lower()

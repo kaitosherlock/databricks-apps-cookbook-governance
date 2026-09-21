@@ -1,15 +1,44 @@
+# Databricks Apps supports exactly two keys here: `command` and `env`.
+# Compute size, resources and OAuth scopes are app-level settings in the
+# Databricks UI/API, not app.yaml keys.
+#
+# Changing any value below only takes effect after the app is DEPLOYED again.
 command: ["streamlit", "run", "app.py"]
 env:
-  # Modified 2026-09-21: kept in sync with streamlit/app.yaml so switching the
-  # app's source code path between the two roots does not silently change the
-  # governance configuration. See that file for the full notes.
+  # Optional catalog allowlist, comma separated. Empty = every catalog the app
+  # service principal can see, for reads AND writes.
   - name: GOVERNANCE_CATALOGS
-    value: "" # empty = no catalog filter, for reads AND writes
-  - name: GOVERNANCE_ADMIN_EMAILS
-    value: "minh18052003@gmail.com"
+    value: ""
+
+  # Server-side role mapping: email:role, comma separated.
+  # Roles: viewer | auditor | steward | access_admin | platform_admin
+  # Anyone not listed gets GOVERNANCE_DEFAULT_ROLE.
+  - name: GOVERNANCE_ROLES
+    value: "minh18052003@gmail.com:platform_admin,edison696996@gmail.com:viewer"
+
+  - name: GOVERNANCE_DEFAULT_ROLE
+    value: "viewer"
+
+  # Master switch. With this off the app is strictly read-only whatever role a
+  # user holds and whatever Unity Catalog would permit.
   - name: GOVERNANCE_ENABLE_WRITES
     value: "true"
+
+  # Only true when running against a developer's own CLI profile. Always
+  # read-only in that mode.
   - name: GOVERNANCE_LOCAL
     value: "false"
-  - name: GOVERNANCE_DEMO
-    value: "false"
+
+  # DEV / UAT / STAGING / PROD. Left empty on purpose: the app must never guess
+  # which environment it is in. Set it and the banner appears; PROD also gets an
+  # explicit warning that does not rely on colour alone.
+  - name: GOVERNANCE_ENVIRONMENT
+    value: ""
+
+  # Optional. Needed only by the modules that have no REST alternative:
+  # system-table lineage, the Databricks audit log, and table/view ownership
+  # transfer. Metadata and grants work without it.
+  # The app service principal also needs CAN USE on this warehouse, plus
+  # USE CATALOG on `system` and USE SCHEMA + SELECT on `system.access`.
+  - name: GOVERNANCE_WAREHOUSE_ID
+    value: "8d61be86fba6dcbd"

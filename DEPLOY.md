@@ -1,142 +1,172 @@
-# Deploy lên Databricks Apps
+# Runbook triển khai và vận hành
 
-Hướng dẫn đưa repo này từ GitHub lên Databricks Apps. Phần chi tiết về quyền Unity Catalog và cách vận hành app governance nằm ở [governance-app/README.md](governance-app/README.md).
+Tài liệu thao tác cho người deploy và trực vận hành ứng dụng
+**Quản trị Unity Catalog**. Phần kiến trúc, vai trò và giới hạn nằm ở
+[`README.md`](README.md).
 
-## Chọn app để deploy
+---
 
-Repo có hai source root deploy được. Chọn một:
+## 1. Thông tin triển khai hiện tại
 
-| Target bundle | Source root | Nội dung |
-|---|---|---|
-| `dev` (mặc định), `prod` | `streamlit/` | **App full tính năng**: toàn bộ demo Cookbook + menu `Governance → Unity Catalog Governance`. |
-| `governance` | `governance-app/` | Chỉ phần governance. Ít dependencies, không có demo Cookbook. |
-
-Bản full dùng `streamlit/requirements.txt` (databricks-connect, databricks-sql-connector, pandas, psycopg, streamlit-folium). Mỗi demo Cookbook có yêu cầu resource riêng (SQL Warehouse, Lakebase, model serving endpoint, secret scope…); demo nào chưa được cấp resource sẽ báo lỗi ngay trên trang của nó, các trang khác vẫn chạy.
-
-> **Cảnh báo phạm vi quyền.** Các demo Cookbook gốc **không** áp dụng bộ giới hạn catalog/allowlist của trang Governance và có thể gọi API khác bằng app service principal. Nếu app này được cấp quyền UC rộng để làm governance, đừng mở `CAN USE` cho nhiều người khi deploy bản full. Muốn phát cho nhiều viewer, deploy target `governance` thay vì `dev`.
-
-## Cách 1 — Databricks Asset Bundle (khuyến nghị)
-
-Cần [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html) v0.218 trở lên.
-
-```bash
-databricks auth login --host https://<workspace>.cloud.databricks.com
-
-git clone https://github.com/kaitosherlock/databricks-apps-cookbook-governance.git
-cd databricks-apps-cookbook-governance
-
-databricks bundle validate -t dev
-databricks bundle deploy -t dev
-databricks bundle run cookbook_governance
-```
-
-Host workspace **không** được hard-code trong `databricks.yml` vì repo này public. Truyền host bằng một trong các cách:
-
-```bash
-databricks bundle deploy -t dev --var="workspace_host=https://<workspace>.cloud.databricks.com"
-```
-
-hoặc đặt `DATABRICKS_HOST`, hoặc dùng profile đã `auth login` (`--profile <tên>`).
-
-Đổi tên app nếu cần:
-
-```bash
-databricks bundle deploy -t dev --var="cookbook_app_name=my-cookbook-app"
-```
-
-Deploy bản governance-only:
-
-```bash
-databricks bundle deploy -t governance
-databricks bundle run uc_governance
-```
-
-## Cách 2 — Upload thủ công
-
-```bash
-databricks workspace import-dir ./streamlit /Workspace/Users/<email>/cookbook-governance --overwrite
-databricks apps create cookbook-governance
-databricks apps deploy cookbook-governance \
-  --source-code-path /Workspace/Users/<email>/cookbook-governance
-```
-
-Thay `./streamlit` bằng `./governance-app` nếu deploy bản governance-only. Bỏ lệnh `apps create` nếu app đã tồn tại. `--overwrite` ghi đè đúng thư mục đích, nên dùng thư mục riêng cho mỗi app.
-
-Hoặc upload thư mục source qua UI Workspace rồi Deploy app từ chính thư mục đó.
-
-## Cấu hình sau khi deploy
-
-App deploy từ Git, nên `app.yaml` đi kèm source và **ghi đè** mọi thứ set ở nơi khác. Vì vậy giá trị thật nằm luôn trong `streamlit/app.yaml` và `governance-app/app.yaml`, giữ đồng bộ giữa hai file.
-
-⚠️ **Repo này public** — mọi giá trị trong `app.yaml` đều đọc được công khai. Hiện tại nó chứa email admin. Tuyệt đối không đặt token, client secret hay hostname workspace vào đây. Nếu cần thêm cấu hình nhạy cảm, chuyển repo sang private trước.
-
-Sửa giá trị thì commit + push + **Deploy** lại; env chỉ đổi sau khi deploy.
-
-Ý nghĩa từng biến:
-
-| Biến | Giá trị |
+| Mục | Giá trị |
 |---|---|
-| `GOVERNANCE_CATALOGS` | Bộ lọc phạm vi **tuỳ chọn**. Danh sách catalog phân tách dấu phẩy, khớp chính xác, VD `governance_sandbox`. **Để trống = không giới hạn theo catalog, cho cả đọc lẫn ghi** |
-| `GOVERNANCE_ADMIN_EMAILS` | Email được phép ghi, phân tách dấu phẩy, không phân biệt hoa/thường |
-| `GOVERNANCE_ENABLE_WRITES` | `true` chỉ sau khi allowlist ở trên đã điền |
-| `GOVERNANCE_LOCAL` | Phải là `false` trên Databricks Apps |
-| `GOVERNANCE_DEMO` | Phải là `false` trên Databricks Apps |
+| Databricks App | `adser` |
+| URL | `https://adser-7474654536971820.aws.databricksapps.com` |
+| Workspace | `https://dbc-76001947-638a.cloud.databricks.com` |
+| Nguồn | Git — `kaitosherlock/databricks-apps-cookbook-governance`, nhánh `main` |
+| Source code path | `governance-app` |
+| Auto-deploy | Tắt (phải bấm Deploy thủ công) |
+| Service principal | `app-4ee9bw adser` |
+| Compute | Medium (2 vCPU, 6 GB) |
 
-Sau đó cấp quyền Unity Catalog cho **application/client ID** của app service principal (tab Authorization của app): `USE CATALOG` + `BROWSE` trên catalog, `USE SCHEMA` trên schema, và `MANAGE` đúng phạm vi cần quản trị. Chi tiết và các cảnh báo về phạm vi MANAGE: [governance-app/README.md](governance-app/README.md#3-cấp-quyền-unity-catalog).
+---
 
-Không cần PAT, client secret hay host trong source. Runtime cấp OAuth cho app.
+## 2. Quy trình deploy
 
-## Kiểm thử trước khi deploy
-
-```bash
-python -m pytest tests -q
-```
-
-Chạy thử local (demo offline, không cần workspace):
-
-```powershell
-cd governance-app
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-$env:GOVERNANCE_DEMO = "true"
-streamlit run app.py
-```
-
-## Đồng bộ sau khi sửa code governance
-
-Source chuẩn là `streamlit/governance/`. Sau khi sửa, export sang bản standalone rồi chạy test:
+Vì app lấy nguồn từ Git, **code phải lên `main` trước khi deploy**.
 
 ```bash
-python scripts/export_governance.py
-python -m pytest tests -q
+git add -A
+git commit -m "<mô tả thay đổi>"
+git push origin main
 ```
 
-## Lỗi thường gặp
+Sau đó trong Databricks:
 
-### `No command to run and no Python file found`
+1. Mở app → tab **Overview**.
+2. Bấm **Deploy**.
+3. Đợi lần lượt: *Stopped app* → *Source code downloaded* → *App spec loaded* →
+   *Packages installed* → *App built* → *App started*.
+4. Mở URL app và kiểm tra theo mục 4.
 
-Source code path đang trỏ vào gốc repo. Gốc repo không có `app.yaml` — đây là repo nhiều app. Điền `streamlit` hoặc `governance-app` vào ô **Source code path**.
+Hoặc bằng CLI:
 
-### `No matching distribution found for databricks-connect~=18.1`
-
-Wheel của `databricks-connect` từ bản 16.2 trở đi đánh dấu `Requires-Python ==3.12.*`. Build image của Databricks Apps không phải 3.12, nên pip không tìm được bản nào hợp lệ và fail toàn bộ bước cài package.
-
-Đã xử lý trong `streamlit/requirements.txt` bằng environment marker:
-
+```bash
+databricks auth login --host https://dbc-76001947-638a.cloud.databricks.com
+databricks apps deploy adser
 ```
-databricks-connect~=18.1; python_version == "3.12"
+
+> Đổi giá trị trong `governance-app/app.yaml` **chỉ có hiệu lực sau khi deploy lại**.
+> Đây là nguyên nhân phổ biến nhất của “tôi đã bật ghi rồi mà app vẫn chỉ đọc”.
+
+---
+
+## 3. Rollback
+
+Databricks Apps không có nút rollback. Vì app deploy từ Git, cách quay lui là
+deploy lại một commit cũ:
+
+```bash
+git revert <commit-hash>        # tạo commit đảo ngược, an toàn hơn reset
+git push origin main
 ```
 
-Hệ quả: trên runtime không phải 3.12, hai trang `Connect to shared cluster` và `Connect to serverless cluster` hiển thị cảnh báo thay vì chạy được. Mọi trang khác, gồm Governance, không bị ảnh hưởng — `st.navigation` chỉ import module của một trang khi bạn bấm vào nó.
+rồi bấm **Deploy**. Xem lịch sử deploy ở tab **Deployments** để biết commit nào
+đang chạy.
 
-Muốn dùng hai trang đó thì cần runtime Python 3.12, hoặc hạ pin xuống bản chạy được với Python của image (`databricks-connect~=16.1`) — lưu ý bản 16.x có thể xung đột pin `pandas~=3.0`.
+---
 
-### Build fail ở package khác
+## 4. Danh sách kiểm tra sau deploy
 
-`streamlit/requirements.txt` còn `databricks-sql-connector`, `psycopg[binary]`, `pandas~=3.0`, `streamlit-folium`. Nếu bản nào không resolve được trên image, deploy `governance-app` để xác nhận pipeline chạy thông trước — bản đó chỉ cần `databricks-sdk` + `streamlit` và có đủ 100% tính năng governance.
+Chạy lần lượt, không bỏ bước nào:
 
-## Ghi chú về repo
+| # | Kiểm tra | Kỳ vọng |
+|---|---|---|
+| 1 | Mở URL app | Trang **Tìm tài sản dữ liệu** hiện ra |
+| 2 | Thanh bên | Hiện đúng workspace, phạm vi catalog, vai trò của bạn |
+| 3 | Thanh bên | Phân biệt rõ “Bạn đang đăng nhập” và “Yêu cầu được thực hiện bằng” |
+| 4 | **Khả năng và cấu hình** → Khả năng | Không có dòng nào ở trạng thái “Chưa kiểm tra” bất thường |
+| 5 | **Khả năng và cấu hình** → Cấu hình | Giá trị env đúng như `app.yaml` vừa deploy |
+| 6 | Chọn một catalog → schema → bảng | Metadata và cột hiển thị |
+| 7 | **Xem quyền** → tab *Quyền hiệu lực* | Cột “Nguồn quyền” phân biệt trực tiếp / kế thừa |
+| 8 | Đối chiếu với Catalog Explorer | Danh sách quyền khớp |
+| 9 | **Cấp / thu hồi quyền** với tài khoản viewer | Hiện “Chỉ đọc” kèm lý do cụ thể |
+| 10 | **Cấp / thu hồi quyền** với tài khoản admin | Tạo được bản xem trước |
+| 11 | Sửa một trường sau khi xem trước | Bản xem trước cũ bị huỷ |
+| 12 | Áp dụng một grant thử nghiệm | Kết quả nêu principal, quyền, đối tượng và Event ID |
+| 13 | Đối chiếu Catalog Explorer, rồi thu hồi | Trạng thái đọc lại khớp |
+| 14 | **Thao tác gần đây** | Ghi đủ người thao tác, danh tính thực thi, lý do, kết quả |
 
-- Workflow `.github/workflows/deploy.yml` của upstream (deploy Docusaurus lên Cloudflare Workers) đã được gỡ bỏ — nó cần secret `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` không có trong repo này và sẽ fail mỗi lần push.
-- Repo chưa có workflow tự động deploy lên Databricks Apps. Muốn thêm thì cần secret `DATABRICKS_HOST` cùng OAuth service principal (`DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET`) và một job chạy `databricks bundle deploy -t prod`.
+---
+
+## 5. Xử lý sự cố
+
+### App không nhìn thấy catalog nào
+
+Service principal chưa được cấp quyền. Trong Catalog Explorer, cấp cho
+**application ID** của `app-4ee9bw adser`:
+
+- `USE CATALOG` (+ `BROWSE`) trên catalog cần quản lý
+- `USE SCHEMA` trên schema cần dùng
+- `MANAGE` trên phạm vi cần quản trị grants, hoặc quyền sở hữu tương ứng
+
+### Mọi thứ chỉ đọc dù đã bật ghi
+
+Kiểm tra theo thứ tự — màn hình **Cấp / thu hồi quyền** sẽ nói cổng nào đang chặn:
+
+1. `GOVERNANCE_ENABLE_WRITES` có phải `"true"` trong app.yaml **đã deploy** không?
+2. Email của bạn có trong `GOVERNANCE_ROLES` với vai trò `access_admin` trở lên không?
+3. Catalog có nằm trong `GOVERNANCE_CATALOGS` không (nếu biến này khác rỗng)?
+
+### “Không đủ quyền” khi xem danh sách quyền
+
+Databricks chỉ trả về đầy đủ ACL cho chủ sở hữu, người có `MANAGE`, hoặc metastore
+admin. Danh tính khác chỉ thấy quyền của chính mình. Đây **không** phải lỗi ứng dụng.
+
+### Lineage / Nhật ký kiểm toán báo chưa dùng được
+
+Cần đủ bốn thứ:
+
+1. `GOVERNANCE_WAREHOUSE_ID` đã đặt trong app.yaml và đã deploy lại.
+2. Service principal có `CAN USE` trên SQL Warehouse đó.
+3. System schema `access` đã được bật bởi account/metastore admin.
+4. Service principal có `USE CATALOG` trên `system`, `USE SCHEMA` + `SELECT` trên
+   `system.access`.
+
+Màn hình sẽ nói cụ thể đang thiếu cái nào.
+
+### Thao tác báo “Chưa xác định kết quả”
+
+Yêu cầu đã gửi đi nhưng không nhận được xác nhận. **Không bấm lại.** Hãy:
+
+1. Mở **Xem quyền** của đúng đối tượng đó.
+2. Bấm **Làm mới dữ liệu**.
+3. Đối chiếu trạng thái thật.
+4. Chỉ thực hiện lại nếu thay đổi thực sự chưa được áp dụng.
+
+Ứng dụng cố ý không tự thử lại để tránh thực hiện hai lần.
+
+### Build thất bại ở bước *Packages installed*
+
+`governance-app/requirements.txt` ghim `databricks-sdk==0.105.0`. Việc ghim là bắt
+buộc: runtime của Databricks Apps cài sẵn `databricks-sdk 0.33.0`, thiếu toàn bộ
+API governance mà app này dùng. Đừng gỡ ghim.
+
+---
+
+## 6. Xem log
+
+- Trong app: tab **Logs**.
+- Endpoint `/logz` của app.
+
+Log của ứng dụng là JSON một dòng mỗi sự kiện, gồm `event_id`, `actor`,
+`execution_identity`, `action`, `target`, `reason`, `status`. Không chứa token,
+secret hay nội dung phản hồi thô.
+
+> Databricks **không** giữ log sau khi compute của app dừng. Muốn lưu lâu dài,
+> bật App telemetry để xuất sang Unity Catalog, hoặc dựa vào `system.access.audit`.
+
+---
+
+## 7. Thay đổi cấu hình thường gặp
+
+| Muốn | Sửa | Nhớ |
+|---|---|---|
+| Thêm người quản trị | `GOVERNANCE_ROLES` | Deploy lại |
+| Giới hạn phạm vi catalog | `GOVERNANCE_CATALOGS` | Deploy lại |
+| Chuyển sang chỉ đọc toàn cục | `GOVERNANCE_ENABLE_WRITES=false` | Deploy lại |
+| Gắn nhãn môi trường | `GOVERNANCE_ENVIRONMENT=PROD` | Deploy lại; PROD có cảnh báo riêng |
+| Bật lineage / kiểm toán | `GOVERNANCE_WAREHOUSE_ID` | Deploy lại + cấp quyền ở mục 5 |
+
+Chỉ cấp `CAN MANAGE` app cho người bảo trì tin cậy: ai sửa được `app.yaml` thì
+sửa được ánh xạ vai trò.
