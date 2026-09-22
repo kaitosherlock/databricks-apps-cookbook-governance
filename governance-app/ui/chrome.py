@@ -51,8 +51,78 @@ def mode_marker(ctx: Context) -> tuple[str, str, str]:
     )
 
 
+_CUSTOM_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');
+
+/* Apply font to text elements while preserving icon fonts */
+html, body, p, label, h1, h2, h3, h4, input, textarea {
+    font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Explicitly protect Material Symbols so ligatures render as icons, not text */
+[data-testid="stIconMaterial"], [data-testid="stIconMaterial"] *, 
+.material-symbols-rounded, .material-symbols-outlined, [class*="material-symbols"] {
+    font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons' !important;
+    font-weight: normal !important;
+    font-style: normal !important;
+    line-height: 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    word-wrap: normal !important;
+    direction: ltr !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+/* Prevent button text from wrapping vertically */
+.stButton > button, div[data-testid="stButton"] > button {
+    white-space: nowrap !important;
+    min-height: 40px !important;
+    font-weight: 500 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 0 16px !important;
+}
+
+/* Align columns and prevent overflowing */
+div[data-testid="column"] {
+    min-width: 0 !important;
+}
+
+/* Stable selectboxes and text inputs */
+div[data-testid="stSelectbox"] label, 
+div[data-testid="stTextInput"] label, 
+div[data-testid="stMultiSelect"] label {
+    white-space: nowrap !important;
+    font-weight: 600 !important;
+}
+
+/* Radio buttons alignment */
+div[data-testid="stRadio"] > div {
+    gap: 16px !important;
+    flex-wrap: wrap !important;
+}
+
+/* Workspace URL wrap */
+.workspace-host-caption {
+    word-break: break-all;
+    font-size: 0.82rem;
+}
+</style>
+"""
+
+
+def inject_custom_css():
+    st.markdown(_CUSTOM_CSS, unsafe_allow_html=True)
+
+
 def render_banner(ctx: Context):
     """Top-of-page context strip, shown on every screen."""
+    inject_custom_css()
     env_label, env_icon = environment_marker(ctx)
     mode_label, mode_icon, mode_why = mode_marker(ctx)
 

@@ -39,7 +39,7 @@ def render(ctx: Context):
         return
 
     filters = state.filters()
-    search_cols = st.columns([3, 3, 1])
+    search_cols = st.columns([4, 4, 1.8], vertical_alignment="bottom")
     with search_cols[0]:
         term = st.text_input(
             "Tìm theo tên", value=filters.get("search", ""),
@@ -55,9 +55,8 @@ def render(ctx: Context):
         )
         state.set_filter("kinds", kinds)
     with search_cols[2]:
-        st.write("")
         if st.button("Làm mới", icon=":material/refresh:", key="home_refresh",
-                     width="stretch"):
+                     use_container_width=True):
             state.clear_caches()
             st.rerun()
 

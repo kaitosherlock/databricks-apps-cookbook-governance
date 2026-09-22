@@ -81,7 +81,14 @@ def object_selector(ctx: Context, assets: AssetService, catalog: str, schema: st
         widgets.show_error(listing.error, context=f"Không đọc được danh sách {KIND_LABELS.get(kind, kind)}.")
         return None
     if listing.empty:
-        widgets.empty_state("empty", what=KIND_LABELS.get(kind, kind).lower())
+        st.selectbox(
+            KIND_LABELS.get(kind, kind),
+            [f"— Chưa có {KIND_LABELS.get(kind, kind).lower()} nào —"],
+            index=0,
+            disabled=True,
+            key=f"pick_object_empty_{catalog}_{schema}_{kind}",
+            help=f"Schema {catalog}.{schema} chưa có {KIND_LABELS.get(kind, kind).lower()} nào.",
+        )
         return None
 
     names = [o.name for o in listing.items]
@@ -96,10 +103,15 @@ def object_selector(ctx: Context, assets: AssetService, catalog: str, schema: st
 
 def compact_picker(ctx: Context, assets: AssetService) -> Target | None:
     """The full chooser, laid out in one row. Used at the top of task pages."""
-    cols = st.columns([2, 2, 1.4, 2.4])
+    cols = st.columns([2.2, 2.2, 2.8, 3.8])
     with cols[0]:
         catalog = catalog_selector(ctx, assets)
     if not catalog:
+        return None
+
+    with cols[1]:
+        schema = schema_selector(ctx, assets, catalog)
+    if not schema:
         return None
 
     sel = state.selection()
@@ -113,14 +125,12 @@ def compact_picker(ctx: Context, assets: AssetService) -> Target | None:
         if kind != sel.get("kind"):
             state.set_selection(kind=kind, name="")
 
-    with cols[1]:
-        schema = schema_selector(ctx, assets, catalog)
-    if not schema:
-        return None
-
     with cols[3]:
         name = object_selector(ctx, assets, catalog, schema, state.selection()["kind"])
     if not name:
+        st.caption(
+            f"Chưa có {KIND_LABELS.get(state.selection()['kind'], 'đối tượng').lower()} nào trong `{catalog}.{schema}`."
+        )
         return None
 
     try:
@@ -156,7 +166,7 @@ def level_picker(ctx: Context, assets: AssetService) -> Target | None:
     if level != sel.get("kind"):
         state.set_selection(kind=level)
 
-    cols = st.columns(3)
+    cols = st.columns([1.2, 1.2, 1.6])
     with cols[0]:
         catalog = catalog_selector(ctx, assets)
     if not catalog:
@@ -174,6 +184,9 @@ def level_picker(ctx: Context, assets: AssetService) -> Target | None:
     with cols[2]:
         name = object_selector(ctx, assets, catalog, schema, level)
     if not name:
+        st.caption(
+            f"Chưa có {label_map.get(level, level).lower()} nào trong `{catalog}.{schema}`."
+        )
         return None
     return Target(level, catalog, schema, name)
 
@@ -189,11 +202,11 @@ def header(ctx: Context, target: Target, detail=None):
 
     st.markdown(f"## {target.name or target.schema or target.catalog}")
 
-    cols = st.columns([2, 2, 3])
+    cols = st.columns([1.8, 3.2, 3])
     type_label = detail.type_label if detail is not None else target.label
     owner = (detail.owner if detail is not None else "") or "Chưa xác định"
     cols[0].markdown(f"**Loại**  \n{type_label}")
-    cols[1].markdown(f"**Chủ sở hữu**  \n{owner}")
+    cols[1].markdown(f"**Chủ sở hữu**  \n<span class='no-break-email'>{owner}</span>", unsafe_allow_html=True)
     with cols[2]:
         st.text_input("Tên đầy đủ", value=target.full_name,
                       key=f"fullname_{target.key}",

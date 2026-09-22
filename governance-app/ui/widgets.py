@@ -132,14 +132,16 @@ def completeness_note(listing):
         st.caption(" ".join(notes))
 
 
-def data_table(rows: list[dict], *, key: str, download_name: str = "", height: int | None = None):
+def data_table(rows: list[dict], *, key: str, download_name: str = "", height: int | None = None, column_config: dict | None = None):
     """A readable table with an honest CSV export."""
     if not rows:
         return
-    # Streamlit rejects height=None outright, so the kwarg is omitted entirely
-    # rather than passed as a null.
-    extra = {"height": height} if height else {}
-    st.dataframe(rows, hide_index=True, width="stretch", **extra)
+    extra = {}
+    if height:
+        extra["height"] = height
+    if column_config:
+        extra["column_config"] = column_config
+    st.dataframe(rows, hide_index=True, use_container_width=True, key=key, **extra)
     if download_name:
         st.download_button(
             "Tải CSV",

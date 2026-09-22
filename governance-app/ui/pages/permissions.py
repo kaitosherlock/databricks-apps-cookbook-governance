@@ -120,10 +120,19 @@ def _grant_table(ctx: Context, grants: GrantService, target: Target, owner: str,
         return
 
     st.caption(f"{len(filtered)}/{len(rows)} dòng.")
+    col_cfg = {
+        "Principal": st.column_config.TextColumn("Principal", width="medium"),
+        "Loại principal": st.column_config.TextColumn("Loại principal", width="small"),
+        "Quyền": st.column_config.TextColumn("Quyền", width="medium"),
+        "Mã Databricks": st.column_config.TextColumn("Mã Databricks", width="medium"),
+        "Nguồn quyền": st.column_config.TextColumn("Nguồn quyền", width="small"),
+        "Cấp tại": st.column_config.TextColumn("Cấp tại", width="medium"),
+    }
     widgets.data_table(
         [r.row() for r in filtered],
         key=f"{cache_key}_table",
         download_name=f"{target.full_name}-{'quyen-hieu-luc' if effective else 'quyen-truc-tiep'}",
+        column_config=col_cfg,
     )
     st.caption(view.CAVEAT)
     if view.has_unreadable:
